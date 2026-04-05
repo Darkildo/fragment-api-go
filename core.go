@@ -84,7 +84,7 @@ func (h *httpCore) doWithRetry(ctx context.Context, data map[string]string, atte
 		}
 		return nil, newNetworkError("request failed after retries", 0, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusTooManyRequests {
 		return nil, newRateLimitError(60)
