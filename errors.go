@@ -63,6 +63,14 @@ type PaymentInitiationError struct{ APIError }
 // TransactionError indicates that the blockchain transaction execution failed.
 type TransactionError struct{ APIError }
 
+// TransactionNotConfirmedError indicates that a transaction was sent to the
+// TON network but was not confirmed within the context deadline.
+// The transaction may still be confirmed later — callers should check the
+// blockchain state before retrying to avoid double-spending.
+type TransactionNotConfirmedError struct {
+	TransactionError
+}
+
 // NetworkError indicates that an HTTP request to Fragment.com failed.
 type NetworkError struct {
 	APIError
@@ -134,6 +142,15 @@ func newPaymentInitiationError(msg string, cause error) *PaymentInitiationError 
 
 func newTransactionError(msg string, cause error) *TransactionError {
 	return &TransactionError{APIError{Message: msg, Cause: cause}}
+}
+
+func newTransactionNotConfirmedError(cause error) *TransactionNotConfirmedError {
+	return &TransactionNotConfirmedError{
+		TransactionError: TransactionError{APIError{
+			Message: "transaction sent but not confirmed within deadline (may still confirm later)",
+			Cause:   cause,
+		}},
+	}
 }
 
 func newNetworkError(msg string, statusCode int, cause error) *NetworkError {

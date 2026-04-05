@@ -3,6 +3,7 @@ package fragment
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -254,7 +255,7 @@ func (w *walletManager) sendTransaction(ctx context.Context, destination, amount
 
 	tx, _, err := w.wallet.SendWaitTransaction(ctx, msg)
 	if err != nil {
-		return "", newTransactionError("send transaction", err)
+		return "", classifyTxError("send transaction", err)
 	}
 
 	return base64.StdEncoding.EncodeToString(tx.Hash), nil
@@ -312,7 +313,7 @@ func (w *walletManager) transferTON(ctx context.Context, toAddress string, amoun
 
 	tx, _, err := w.wallet.SendWaitTransaction(ctx, msg)
 	if err != nil {
-		return nil, newTransactionError("transfer TON", err)
+		return nil, classifyTxError("transfer TON", err)
 	}
 
 	txHash := base64.StdEncoding.EncodeToString(tx.Hash)
@@ -327,6 +328,16 @@ func (w *walletManager) transferTON(ctx context.Context, toAddress string, amoun
 		BalanceBefore:   balBefore.BalanceTON,
 		Memo:            memo,
 	}, nil
+}
+
+// classifyTxError wraps a transaction error into the appropriate typed error.
+// If the underlying cause is [ton.ErrTxWasNotConfirmed], it returns a
+// [TransactionNotConfirmedError]; otherwise a generic [TransactionError].
+func classifyTxError(msg string, err error) error {
+	if errors.Is(err, ton.ErrTxWasNotConfirmed) {
+		return newTransactionNotConfirmedError(err)
+	}
+	return newTransactionError(msg, err)
 }
 
 // canonicalVersions is a fixed-order list of canonical (non-alias) wallet versions.

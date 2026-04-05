@@ -128,13 +128,18 @@ Config принимает регистронезависимые строки: `
 ```go
 result, err := api.BuyStars(ctx, "user", 100, false)
 if err != nil {
+    var notConfirmed *fragment.TransactionNotConfirmedError
     var txErr  *fragment.TransactionError
     var balErr *fragment.InsufficientBalanceError
     var userErr *fragment.UserNotFoundError
 
     switch {
+    case errors.As(err, &notConfirmed):
+        // TX отправлена, но не подтверждена — может подтвердиться позже!
+        // Проверьте состояние блокчейна перед повтором (double-spend).
+        log.Printf("TX в ожидании: %v", notConfirmed)
     case errors.As(err, &txErr):
-        log.Printf("TX failed: %v (cause: %v)", txErr, errors.Unwrap(txErr))
+        log.Printf("TX ошибка: %v", txErr)
     case errors.As(err, &balErr):
         log.Printf("Нужно %.6f TON, есть %.6f", balErr.Required, balErr.Current)
     case errors.As(err, &userErr):
@@ -150,15 +155,16 @@ if err != nil {
 ```
 APIError (базовый, имеет Unwrap)
 ├── AuthenticationError
-├── UserNotFoundError        — .Username
-├── InvalidAmountError       — .Amount, .MinValue, .MaxValue
-├── InsufficientBalanceError — .Required, .Current
+├── UserNotFoundError              — .Username
+├── InvalidAmountError             — .Amount, .MinValue, .MaxValue
+├── InsufficientBalanceError       — .Required, .Current
 ├── PaymentInitiationError
 ├── TransactionError
-├── NetworkError             — .StatusCode
-├── RateLimitError           — .RetryAfter
+│   └── TransactionNotConfirmedError — tx отправлена, но не подтверждена за deadline
+├── NetworkError                   — .StatusCode
+├── RateLimitError                 — .RetryAfter
 └── WalletError
-    └── InvalidWalletVersionError — .Version, .SupportedVersions
+    └── InvalidWalletVersionError  — .Version, .SupportedVersions
 ```
 
 ---

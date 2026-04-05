@@ -128,13 +128,18 @@ Errors are never swallowed into string fields — always returned as Go errors.
 ```go
 result, err := api.BuyStars(ctx, "user", 100, false)
 if err != nil {
+    var notConfirmed *fragment.TransactionNotConfirmedError
     var txErr  *fragment.TransactionError
     var balErr *fragment.InsufficientBalanceError
     var userErr *fragment.UserNotFoundError
 
     switch {
+    case errors.As(err, &notConfirmed):
+        // TX was sent but not confirmed — may still confirm later!
+        // Check blockchain state before retrying to avoid double-spend.
+        log.Printf("TX pending: %v", notConfirmed)
     case errors.As(err, &txErr):
-        log.Printf("TX failed: %v (cause: %v)", txErr, errors.Unwrap(txErr))
+        log.Printf("TX failed: %v", txErr)
     case errors.As(err, &balErr):
         log.Printf("Need %.6f TON, have %.6f", balErr.Required, balErr.Current)
     case errors.As(err, &userErr):
@@ -150,13 +155,14 @@ if err != nil {
 ```
 APIError (base, has Unwrap)
 ├── AuthenticationError
-├── UserNotFoundError        — .Username
-├── InvalidAmountError       — .Amount, .MinValue, .MaxValue
-├── InsufficientBalanceError — .Required, .Current
+├── UserNotFoundError              — .Username
+├── InvalidAmountError             — .Amount, .MinValue, .MaxValue
+├── InsufficientBalanceError       — .Required, .Current
 ├── PaymentInitiationError
 ├── TransactionError
-├── NetworkError             — .StatusCode
-├── RateLimitError           — .RetryAfter
+│   └── TransactionNotConfirmedError — tx sent but not confirmed in deadline
+├── NetworkError                   — .StatusCode
+├── RateLimitError                 — .RetryAfter
 └── WalletError
     └── InvalidWalletVersionError — .Version, .SupportedVersions
 ```
