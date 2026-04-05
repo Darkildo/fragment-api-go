@@ -39,7 +39,7 @@ func main() {
 
 	// --- Look up a user ---
 	fmt.Println("=== Looking up user ===")
-	user, err := api.GetRecipientStars(ctx, "jane_doe")
+	user, err := api.GetRecipientStars(ctx, "VladimIRKish")
 	if err != nil {
 		var uerr *fragment.UserNotFoundError
 		if errors.As(err, &uerr) {
@@ -55,7 +55,7 @@ func main() {
 
 	// --- Send Stars (anonymous) ---
 	fmt.Println("\n=== Sending 100 Stars (anonymous) ===")
-	result, err := api.BuyStars(ctx, "jane_doe", 100, false)
+	result, err := api.BuyStars(ctx, "VladimIRKish", 100, false)
 	if err != nil {
 		var txErr *fragment.TransactionError
 		if errors.As(err, &txErr) {
@@ -70,7 +70,7 @@ func main() {
 
 	// --- Gift Premium ---
 	fmt.Println("\n=== Gifting 3 months Premium ===")
-	premResult, err := api.GiftPremium(ctx, "jane_doe", 3, false)
+	premResult, err := api.GiftPremium(ctx, "VladimIRKish", 3, false)
 	if err != nil {
 		log.Printf("GiftPremium error: %v", err)
 	} else if premResult.Success {
@@ -79,7 +79,7 @@ func main() {
 
 	// --- Direct TON transfer ---
 	fmt.Println("\n=== Transferring 0.5 TON ===")
-	transfer, err := api.TransferTON(ctx, "EQCD39VS5jcptHL8vMjEXrzGaRcCVYto7HUn4bpAOg8xqB2N", 0.5, "Payment")
+	transfer, err := api.TransferTON(ctx, "UQAq1cXMjGoz5fB9xoZlf0H6hHGtbS6tEIcQ3U7l_Oyk9fT2", 0.5, "Test Payment")
 	if err != nil {
 		var balErr *fragment.InsufficientBalanceError
 		if errors.As(err, &balErr) {
