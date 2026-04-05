@@ -16,8 +16,8 @@ func (c *Client) BuyStars(ctx context.Context, username string, quantity int, sh
 	if err != nil {
 		return nil, newUserNotFoundError(username, err)
 	}
-	if err := validateAmount(quantity, 1, 999999); err != nil {
-		return nil, newInvalidAmountError(quantity, 1, 999999, err)
+	if err := validateAmount(quantity, 50, 999999); err != nil {
+		return nil, newInvalidAmountError(quantity, 50, 999999, err)
 	}
 
 	user, err := c.checkUser(ctx, clean, "searchStarsRecipient")
