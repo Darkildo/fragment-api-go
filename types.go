@@ -9,14 +9,19 @@ import (
 type WalletVersion string
 
 const (
+	// WalletV3R1 is the legacy V3R1 wallet contract.
 	WalletV3R1 WalletVersion = "V3R1"
+	// WalletV3R2 is the legacy V3R2 wallet contract.
 	WalletV3R2 WalletVersion = "V3R2"
-	WalletV4R2 WalletVersion = "V4R2" // recommended default
+	// WalletV4R2 is the most common wallet contract (recommended default).
+	WalletV4R2 WalletVersion = "V4R2"
+	// WalletV5R1 is the latest wallet contract with modern features.
 	WalletV5R1 WalletVersion = "V5R1"
-	WalletW5   WalletVersion = "W5" // alias for V5R1
+	// WalletW5 is an alias for [WalletV5R1].
+	WalletW5 WalletVersion = "W5"
 )
 
-// String returns the version string.
+// String implements [fmt.Stringer].
 func (v WalletVersion) String() string { return string(v) }
 
 // UserInfo contains information about a Telegram user retrieved from
@@ -35,6 +40,7 @@ type UserInfo struct {
 	Avatar string `json:"avatar,omitempty"`
 }
 
+// String implements [fmt.Stringer].
 func (u UserInfo) String() string {
 	return fmt.Sprintf("UserInfo{Name: %q, Found: %v}", u.Name, u.Found)
 }
@@ -63,6 +69,7 @@ type PurchaseResult struct {
 	RequiredAmount float64 `json:"required_amount,omitempty"`
 }
 
+// String implements [fmt.Stringer].
 func (p PurchaseResult) String() string {
 	if p.Success {
 		return fmt.Sprintf("PurchaseResult{OK, TX: %s, Cost: %.6f TON}", p.TransactionHash, p.RequiredAmount)
@@ -94,6 +101,7 @@ type TransferResult struct {
 	Memo string `json:"memo,omitempty"`
 }
 
+// String implements [fmt.Stringer].
 func (t TransferResult) String() string {
 	if t.Success {
 		return fmt.Sprintf("TransferResult{OK, TX: %s, %.6f TON}", t.TransactionHash, t.AmountTON)
@@ -129,6 +137,7 @@ func (w *WalletBalance) HasSufficientBalance(requiredNano, feeNano uint64) bool 
 	return w.BalanceNano >= requiredNano+feeNano
 }
 
+// String implements [fmt.Stringer].
 func (w WalletBalance) String() string {
 	return fmt.Sprintf("WalletBalance{%.6f TON, %s, %s}", w.BalanceTON, w.Address, w.Version)
 }
@@ -146,6 +155,7 @@ type WalletInfo struct {
 	Address string `json:"address,omitempty"`
 }
 
+// String implements [fmt.Stringer].
 func (i WalletInfo) String() string {
 	return fmt.Sprintf("WalletInfo{Version: %s, Address: %s}", i.Version, i.Address)
 }

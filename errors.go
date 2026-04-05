@@ -5,10 +5,13 @@ import "fmt"
 // APIError is the base error type for all Fragment API errors.
 // Use [errors.As] to match specific subtypes.
 type APIError struct {
+	// Message is a human-readable description of the error.
 	Message string
-	Cause   error
+	// Cause is the underlying error, if any. Accessible via [errors.Unwrap].
+	Cause error
 }
 
+// Error returns the error message, including the cause if present.
 func (e *APIError) Error() string {
 	if e.Cause != nil {
 		return fmt.Sprintf("%s: %v", e.Message, e.Cause)
@@ -16,6 +19,7 @@ func (e *APIError) Error() string {
 	return e.Message
 }
 
+// Unwrap returns the underlying cause for use with [errors.Is] and [errors.As].
 func (e *APIError) Unwrap() error { return e.Cause }
 
 // AuthenticationError indicates that the session has expired or the
@@ -26,6 +30,7 @@ type AuthenticationError struct{ APIError }
 // or cannot receive the specified payment type.
 type UserNotFoundError struct {
 	APIError
+	// Username is the Telegram username that was not found.
 	Username string
 }
 
@@ -33,8 +38,11 @@ type UserNotFoundError struct {
 // the valid range.
 type InvalidAmountError struct {
 	APIError
-	Amount   int
+	// Amount is the value that was rejected.
+	Amount int
+	// MinValue is the minimum allowed value (inclusive).
 	MinValue int
+	// MaxValue is the maximum allowed value (inclusive).
 	MaxValue int
 }
 
@@ -42,8 +50,10 @@ type InvalidAmountError struct {
 // TON to complete the transaction.
 type InsufficientBalanceError struct {
 	APIError
+	// Required is the total TON needed (amount + fees).
 	Required float64
-	Current  float64
+	// Current is the wallet's current balance in TON.
+	Current float64
 }
 
 // PaymentInitiationError indicates that the Fragment API rejected the
@@ -56,13 +66,15 @@ type TransactionError struct{ APIError }
 // NetworkError indicates that an HTTP request to Fragment.com failed.
 type NetworkError struct {
 	APIError
+	// StatusCode is the HTTP status code (0 if the request did not complete).
 	StatusCode int
 }
 
 // RateLimitError indicates that the API rate limit has been exceeded.
 type RateLimitError struct {
 	APIError
-	RetryAfter int // seconds
+	// RetryAfter is the recommended wait time in seconds before retrying.
+	RetryAfter int
 }
 
 // WalletError indicates a generic wallet operation failure.
@@ -72,11 +84,13 @@ type WalletError struct{ APIError }
 // is not supported.
 type InvalidWalletVersionError struct {
 	WalletError
-	Version           string
+	// Version is the unsupported version string that was provided.
+	Version string
+	// SupportedVersions lists all valid wallet versions.
 	SupportedVersions []WalletVersion
 }
 
-// supportedWalletVersions enumerates all recognised TON wallet versions.
+// supportedWalletVersionsList enumerates all recognised TON wallet versions.
 var supportedWalletVersionsList = []WalletVersion{
 	WalletV4R2, WalletV5R1, WalletW5, WalletV3R2, WalletV3R1,
 }
