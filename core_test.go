@@ -73,7 +73,7 @@ func TestMakeRequest_Success(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"ok":     true,
 			"result": map[string]interface{}{"foo": "bar"},
 		})
@@ -136,7 +136,7 @@ func TestMakeRequest_ServerError(t *testing.T) {
 
 func TestMakeRequest_InvalidJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("not json"))
+		_, _ = w.Write([]byte("not json"))
 	}))
 	defer srv.Close()
 
@@ -182,7 +182,7 @@ func testMakeRequest(t *testing.T, srv *httptest.Server, response map[string]int
 
 	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer testSrv.Close()
 

@@ -53,7 +53,8 @@ fmt.Printf("TX: %s\n", result.TransactionHash)
 - **Multi-Wallet Support** — V3R1, V3R2, V4R2 (default), V5R1/W5 as typed enum
 - **Sender Visibility** — anonymous or visible payments
 - **Automatic Retries** — context-aware exponential backoff
-- **Typed Errors** — full error chain preserved via `errors.Is` / `errors.As`
+- **Transaction Serialization** — safe concurrent calls from multiple goroutines; transactions are queued and executed one at a time via channel semaphore, with context-aware cancellation
+- **Typed Errors** — full error chain preserved via `errors.Is` / `errors.As`; dedicated `TransactionNotConfirmedError` for timeout scenarios
 - **Structured Logging** — optional `log/slog` integration (stdlib, no deps)
 - **Zero External Deps** — only [tonutils-go](https://github.com/xssnick/tonutils-go) + stdlib
 
@@ -128,13 +129,18 @@ Errors are never swallowed into string fields — always returned as Go errors.
 ```go
 result, err := api.BuyStars(ctx, "user", 100, false)
 if err != nil {
+    var notConfirmed *fragment.TransactionNotConfirmedError
     var txErr  *fragment.TransactionError
     var balErr *fragment.InsufficientBalanceError
     var userErr *fragment.UserNotFoundError
 
     switch {
+    case errors.As(err, &notConfirmed):
+        // TX was sent but not confirmed — may still confirm later!
+        // Check blockchain state before retrying to avoid double-spend.
+        log.Printf("TX pending: %v", notConfirmed)
     case errors.As(err, &txErr):
-        log.Printf("TX failed: %v (cause: %v)", txErr, errors.Unwrap(txErr))
+        log.Printf("TX failed: %v", txErr)
     case errors.As(err, &balErr):
         log.Printf("Need %.6f TON, have %.6f", balErr.Required, balErr.Current)
     case errors.As(err, &userErr):
@@ -150,13 +156,14 @@ if err != nil {
 ```
 APIError (base, has Unwrap)
 ├── AuthenticationError
-├── UserNotFoundError        — .Username
-├── InvalidAmountError       — .Amount, .MinValue, .MaxValue
-├── InsufficientBalanceError — .Required, .Current
+├── UserNotFoundError              — .Username
+├── InvalidAmountError             — .Amount, .MinValue, .MaxValue
+├── InsufficientBalanceError       — .Required, .Current
 ├── PaymentInitiationError
 ├── TransactionError
-├── NetworkError             — .StatusCode
-├── RateLimitError           — .RetryAfter
+│   └── TransactionNotConfirmedError — tx sent but not confirmed in deadline
+├── NetworkError                   — .StatusCode
+├── RateLimitError                 — .RetryAfter
 └── WalletError
     └── InvalidWalletVersionError — .Version, .SupportedVersions
 ```
@@ -178,6 +185,51 @@ api, _ := fragment.New(fragment.Config{
     Logger: logger,
 })
 ```
+
+---
+
+## Concurrency
+
+All methods on `Client` are safe to call from multiple goroutines.
+Transactions (Stars, Premium, TON transfers) are automatically serialized
+via an internal semaphore — only one blockchain transaction is in-flight
+at a time. Callers waiting for the slot can cancel via context.
+
+```go
+api, _ := fragment.New(fragment.Config{...})
+defer api.Close()
+
+var wg sync.WaitGroup
+for _, user := range []string{"alice_t", "bob_smith", "charlie_99"} {
+    wg.Add(1)
+    go func(username string) {
+        defer wg.Done()
+        ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+        defer cancel()
+
+        // Safe: concurrent calls are queued internally.
+        // Each transaction waits for the previous one to complete.
+        result, err := api.BuyStars(ctx, username, 100, false)
+        if err != nil {
+            log.Printf("%s: %v", username, err)
+            return
+        }
+        log.Printf("%s: TX %s", username, result.TransactionHash)
+    }(user)
+}
+wg.Wait()
+```
+
+**Why serialization?** TON wallet contracts use a sequence number (seqno)
+that increments with each outgoing transaction. Parallel sends from the same
+wallet would use the same seqno, causing one transaction to be rejected by
+the network. The semaphore ensures sequential execution at the wallet level.
+
+**Timeout behavior:** if a transaction hangs (e.g. network issues), the
+semaphore is held until the context deadline or a 180-second fallback from
+tonutils-go. Other goroutines waiting for the slot receive
+`context.DeadlineExceeded` from their own context. A hung transaction never
+blocks the semaphore permanently.
 
 ---
 

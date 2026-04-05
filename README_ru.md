@@ -53,7 +53,8 @@ fmt.Printf("TX: %s\n", result.TransactionHash)
 - **Мульти-кошелек** — V3R1, V3R2, V4R2 (по умолчанию), V5R1/W5 как типизированный enum
 - **Видимость отправителя** — анонимные или видимые платежи
 - **Автоматические повторы** — экспоненциальный backoff с поддержкой context
-- **Типизированные ошибки** — полная цепочка ошибок через `errors.Is` / `errors.As`
+- **Сериализация транзакций** — безопасный вызов из нескольких горутин; транзакции ставятся в очередь и выполняются по одной через канал-семафор с поддержкой отмены через context
+- **Типизированные ошибки** — полная цепочка через `errors.Is` / `errors.As`; отдельный `TransactionNotConfirmedError` для таймаутов
 - **Структурное логирование** — опциональное через `log/slog` (stdlib, без зависимостей)
 - **Минимум зависимостей** — только [tonutils-go](https://github.com/xssnick/tonutils-go) + stdlib
 
@@ -128,13 +129,18 @@ Config принимает регистронезависимые строки: `
 ```go
 result, err := api.BuyStars(ctx, "user", 100, false)
 if err != nil {
+    var notConfirmed *fragment.TransactionNotConfirmedError
     var txErr  *fragment.TransactionError
     var balErr *fragment.InsufficientBalanceError
     var userErr *fragment.UserNotFoundError
 
     switch {
+    case errors.As(err, &notConfirmed):
+        // TX отправлена, но не подтверждена — может подтвердиться позже!
+        // Проверьте состояние блокчейна перед повтором (double-spend).
+        log.Printf("TX в ожидании: %v", notConfirmed)
     case errors.As(err, &txErr):
-        log.Printf("TX failed: %v (cause: %v)", txErr, errors.Unwrap(txErr))
+        log.Printf("TX ошибка: %v", txErr)
     case errors.As(err, &balErr):
         log.Printf("Нужно %.6f TON, есть %.6f", balErr.Required, balErr.Current)
     case errors.As(err, &userErr):
@@ -150,15 +156,16 @@ if err != nil {
 ```
 APIError (базовый, имеет Unwrap)
 ├── AuthenticationError
-├── UserNotFoundError        — .Username
-├── InvalidAmountError       — .Amount, .MinValue, .MaxValue
-├── InsufficientBalanceError — .Required, .Current
+├── UserNotFoundError              — .Username
+├── InvalidAmountError             — .Amount, .MinValue, .MaxValue
+├── InsufficientBalanceError       — .Required, .Current
 ├── PaymentInitiationError
 ├── TransactionError
-├── NetworkError             — .StatusCode
-├── RateLimitError           — .RetryAfter
+│   └── TransactionNotConfirmedError — tx отправлена, но не подтверждена за deadline
+├── NetworkError                   — .StatusCode
+├── RateLimitError                 — .RetryAfter
 └── WalletError
-    └── InvalidWalletVersionError — .Version, .SupportedVersions
+    └── InvalidWalletVersionError  — .Version, .SupportedVersions
 ```
 
 ---
@@ -178,6 +185,50 @@ api, _ := fragment.New(fragment.Config{
     Logger: logger,
 })
 ```
+
+---
+
+## Конкурентность
+
+Все методы `Client` безопасны для вызова из нескольких горутин.
+Транзакции (Stars, Premium, TON-переводы) автоматически сериализуются
+через внутренний семафор — только одна транзакция в блокчейне за раз.
+Ожидающие горутины могут отменить ожидание через context.
+
+```go
+api, _ := fragment.New(fragment.Config{...})
+defer api.Close()
+
+var wg sync.WaitGroup
+for _, user := range []string{"alice_t", "bob_smith", "charlie_99"} {
+    wg.Add(1)
+    go func(username string) {
+        defer wg.Done()
+        ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+        defer cancel()
+
+        // Безопасно: параллельные вызовы ставятся в очередь.
+        // Каждая транзакция ждёт завершения предыдущей.
+        result, err := api.BuyStars(ctx, username, 100, false)
+        if err != nil {
+            log.Printf("%s: %v", username, err)
+            return
+        }
+        log.Printf("%s: TX %s", username, result.TransactionHash)
+    }(user)
+}
+wg.Wait()
+```
+
+**Почему сериализация?** TON-кошельки используют sequence number (seqno),
+который увеличивается с каждой исходящей транзакцией. Параллельные отправки
+с одного кошелька используют один seqno — одна транзакция будет отклонена сетью.
+Семафор гарантирует последовательное выполнение на уровне кошелька.
+
+**Поведение при таймауте:** если транзакция зависла (проблемы сети),
+семафор удерживается до deadline context или 180-секундного fallback
+из tonutils-go. Другие горутины получают `context.DeadlineExceeded`
+из своего context. Зависшая транзакция никогда не блокирует семафор навсегда.
 
 ---
 

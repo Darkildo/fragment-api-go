@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/xssnick/tonutils-go/ton"
 )
 
 func TestAPIError_Error_WithCause(t *testing.T) {
@@ -166,6 +168,64 @@ func TestErrorsAs_PaymentInitiationError(t *testing.T) {
 	var target *PaymentInitiationError
 	if !errors.As(err, &target) {
 		t.Fatal("errors.As should match")
+	}
+}
+
+// --- TransactionNotConfirmedError ---
+
+func TestErrorsAs_TransactionNotConfirmedError(t *testing.T) {
+	cause := fmt.Errorf("some timeout")
+	err := newTransactionNotConfirmedError(cause)
+
+	var target *TransactionNotConfirmedError
+	if !errors.As(err, &target) {
+		t.Fatal("errors.As should match *TransactionNotConfirmedError")
+	}
+	if target.Unwrap() != cause {
+		t.Error("cause should be preserved")
+	}
+	if !strings.Contains(target.Error(), "not confirmed") {
+		t.Errorf("Error() should mention 'not confirmed': %s", target.Error())
+	}
+}
+
+func TestClassifyTxError_NotConfirmed(t *testing.T) {
+	// Simulate the exact error tonutils-go returns.
+	err := classifyTxError("send", ton.ErrTxWasNotConfirmed)
+
+	var target *TransactionNotConfirmedError
+	if !errors.As(err, &target) {
+		t.Fatalf("expected *TransactionNotConfirmedError, got %T: %v", err, err)
+	}
+
+	// Note: errors.As does NOT traverse struct embedding, so matching
+	// *TransactionError via *TransactionNotConfirmedError requires the
+	// concrete type. Users should match *TransactionNotConfirmedError first,
+	// then fall back to *TransactionError for other tx failures.
+}
+
+func TestClassifyTxError_OtherError(t *testing.T) {
+	err := classifyTxError("send", fmt.Errorf("boc decode failed"))
+
+	var target *TransactionNotConfirmedError
+	if errors.As(err, &target) {
+		t.Fatal("should NOT match *TransactionNotConfirmedError for other errors")
+	}
+
+	var txErr *TransactionError
+	if !errors.As(err, &txErr) {
+		t.Fatal("should match *TransactionError")
+	}
+}
+
+func TestClassifyTxError_WrappedNotConfirmed(t *testing.T) {
+	// tonutils-go might wrap ErrTxWasNotConfirmed in fmt.Errorf.
+	wrapped := fmt.Errorf("wallet send: %w", ton.ErrTxWasNotConfirmed)
+	err := classifyTxError("send", wrapped)
+
+	var target *TransactionNotConfirmedError
+	if !errors.As(err, &target) {
+		t.Fatal("should match *TransactionNotConfirmedError even when cause is wrapped")
 	}
 }
 
