@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"sync"
 
 	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/liteclient"
@@ -16,9 +17,13 @@ import (
 )
 
 const (
-	transferFeeNano uint64  = 1_000_000 // 0.001 TON
-	transferFeeTON  float64 = 0.05      // fee buffer for direct transfers
-	defaultVersion          = WalletV4R2
+	// fragmentTxFeeNano is the fee for Fragment-initiated transactions (balance check).
+	fragmentTxFeeNano uint64 = 1_000_000 // 0.001 TON
+
+	// directTransferFeeTON is the fee buffer for direct TON transfers.
+	directTransferFeeTON float64 = 0.05
+
+	defaultVersion = WalletV4R2
 
 	mainnetConfigURL = "https://ton-blockchain.github.io/global.config.json"
 	testnetConfigURL = "https://ton-blockchain.github.io/testnet-global.config.json"
@@ -40,10 +45,12 @@ type walletManager struct {
 	version  WalletVersion
 	testnet  bool
 
-	// Lazily initialised on first blockchain call.
-	pool   *liteclient.ConnectionPool
-	api    ton.APIClientWrapped
-	wallet *wallet.Wallet
+	// Lazily initialised on first blockchain call via sync.Once.
+	once    sync.Once
+	initErr error // sticky error from ensureConnected
+	pool    *liteclient.ConnectionPool
+	api     ton.APIClientWrapped
+	wallet  *wallet.Wallet
 }
 
 // newWalletManager creates and validates a walletManager.
@@ -71,39 +78,50 @@ func newWalletManager(mnemonic, version string, testnet bool) (*walletManager, e
 }
 
 // ensureConnected lazily initialises the LiteClient pool, API client,
-// and wallet instance on first call. Subsequent calls are no-ops.
+// and wallet instance. It is safe for concurrent use (guarded by sync.Once).
+// If initialisation fails, the error is sticky — subsequent calls return
+// the same error without retrying.
 func (w *walletManager) ensureConnected(ctx context.Context) error {
-	if w.wallet != nil {
-		return nil
-	}
+	w.once.Do(func() {
+		w.initErr = w.connect(ctx)
+	})
+	return w.initErr
+}
 
+// connect performs the actual network initialisation. Called exactly once.
+func (w *walletManager) connect(ctx context.Context) error {
 	cfgURL := mainnetConfigURL
 	if w.testnet {
 		cfgURL = testnetConfigURL
 	}
 
-	w.pool = liteclient.NewConnectionPool()
+	pool := liteclient.NewConnectionPool()
 
 	cfg, err := liteclient.GetConfigFromUrl(ctx, cfgURL)
 	if err != nil {
+		pool.Stop()
 		return newWalletError(fmt.Sprintf("fetch TON config from %s", cfgURL), err)
 	}
 
-	if err := w.pool.AddConnectionsFromConfig(ctx, cfg); err != nil {
+	if err := pool.AddConnectionsFromConfig(ctx, cfg); err != nil {
+		pool.Stop()
 		return newWalletError("connect to TON network", err)
 	}
 
-	apiClient := ton.NewAPIClient(w.pool, ton.ProofCheckPolicyFast).WithRetry()
+	apiClient := ton.NewAPIClient(pool, ton.ProofCheckPolicyFast).WithRetry()
 	apiClient.SetTrustedBlockFromConfig(cfg)
-	w.api = apiClient
 
 	verCfg := w.tonutilsVersionConfig()
 	wlt, err := wallet.FromSeedWithOptions(apiClient, w.mnemonic, verCfg)
 	if err != nil {
+		pool.Stop()
 		return newWalletError("create wallet from mnemonic", err)
 	}
-	w.wallet = wlt
 
+	// All succeeded — commit state.
+	w.pool = pool
+	w.api = apiClient
+	w.wallet = wlt
 	return nil
 }
 
@@ -234,7 +252,7 @@ func (w *walletManager) transferTON(ctx context.Context, toAddress string, amoun
 		return nil, err
 	}
 
-	totalRequired := amountTON + transferFeeTON
+	totalRequired := amountTON + directTransferFeeTON
 	if balBefore.BalanceTON < totalRequired {
 		return nil, newInsufficientBalanceError(totalRequired, balBefore.BalanceTON)
 	}
@@ -271,20 +289,16 @@ func (w *walletManager) transferTON(ctx context.Context, toAddress string, amoun
 	}, nil
 }
 
+// canonicalVersions is a fixed-order list of canonical (non-alias) wallet versions.
+var canonicalVersions = []WalletVersion{
+	WalletV4R2, WalletV5R1, WalletV3R2, WalletV3R1,
+}
+
 // info returns wallet metadata as a typed struct.
 func (w *walletManager) info() WalletInfo {
-	versions := make([]WalletVersion, 0, len(versionAliases))
-	seen := map[WalletVersion]bool{}
-	for _, v := range versionAliases {
-		if !seen[v] {
-			versions = append(versions, v)
-			seen[v] = true
-		}
-	}
-
 	wi := WalletInfo{
 		Version:           w.version,
-		SupportedVersions: versions,
+		SupportedVersions: canonicalVersions,
 	}
 	if w.wallet != nil {
 		wi.Address = w.wallet.WalletAddress().String()
