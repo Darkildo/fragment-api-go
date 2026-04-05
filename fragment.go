@@ -35,7 +35,7 @@ import (
 )
 
 // Version is the library version. Go port of fragment-api-py v3.2.0.
-const Version = "1.3.0"
+const Version = "1.3.1"
 
 // Config contains all parameters needed to create a [Client].
 type Config struct {
