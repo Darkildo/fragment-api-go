@@ -6,7 +6,8 @@
 
 **Go client for the Fragment.com API — Telegram Stars, Premium subscriptions, and TON transfers.**
 
-Go port of [fragment-api-py](https://github.com/S1qwy/fragment-api-py) (Python v3.2.0).
+Go port of [fragment-api-py](https://github.com/S1qwy/fragment-api-py) (Python v3.2.0).  
+TON blockchain integration via [tonutils-go](https://github.com/xssnick/tonutils-go).
 
 [README on Russian](README_ru.md)
 
@@ -21,46 +22,26 @@ go get github.com/Darkildo/fragment-api-go
 ## Quick Start
 
 ```go
-package main
+import fragment "github.com/Darkildo/fragment-api-go"
 
-import (
-    "context"
-    "fmt"
-    "log"
-
-    fragment "github.com/Darkildo/fragment-api-go"
-)
-
-func main() {
-    api, err := fragment.New(fragment.Config{
-        Cookies:        "stel_ssid=...; stel_token=...; stel_dt=...; stel_ton_token=...",
-        HashValue:      "your_hash_from_network_tab",
-        WalletMnemonic: "word1 word2 ... word24",
-        WalletAPIKey:   "your_tonapi_key",
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer api.Close()
-
-    ctx := context.Background()
-
-    // Look up a user
-    user, err := api.GetRecipientStars(ctx, "jane_doe")
-    if err != nil {
-        log.Fatal(err)
-    }
-    fmt.Printf("User: %s\n", user.Name)
-
-    // Send 100 Stars anonymously
-    result, err := api.BuyStars(ctx, "jane_doe", 100, false)
-    if err != nil {
-        log.Fatal(err)
-    }
-    if result.Success {
-        fmt.Printf("TX: %s\n", result.TransactionHash)
-    }
+api, err := fragment.New(fragment.Config{
+    Cookies:        "stel_ssid=...; stel_token=...; stel_dt=...; stel_ton_token=...",
+    HashValue:      "your_hash_from_network_tab",
+    WalletMnemonic: "word1 word2 ... word24",
+})
+if err != nil {
+    log.Fatal(err)
 }
+defer api.Close()
+
+ctx := context.Background()
+
+// Send 100 Stars
+result, err := api.BuyStars(ctx, "jane_doe", 100, false)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("TX: %s\n", result.TransactionHash)
 ```
 
 ## Features
@@ -69,89 +50,39 @@ func main() {
 - **Premium Gifts** — gift 3/6/12-month Telegram Premium subscriptions
 - **TON Ads Top-up** — top up TON Ads accounts
 - **Direct TON Transfers** — send TON to any address with optional memo
-- **Multi-Wallet Support** — V3R1, V3R2, V4R2 (default), V5R1/W5
+- **Multi-Wallet Support** — V3R1, V3R2, V4R2 (default), V5R1/W5 as typed enum
 - **Sender Visibility** — anonymous or visible payments
-- **Automatic Retries** — exponential backoff on transient network errors
-- **Typed Errors** — specific error type for each failure scenario
-- **Context Support** — all operations accept `context.Context`
+- **Automatic Retries** — context-aware exponential backoff
+- **Typed Errors** — full error chain preserved via `errors.Is` / `errors.As`
+- **Structured Logging** — optional `log/slog` integration (stdlib, no deps)
+- **Zero External Deps** — only [tonutils-go](https://github.com/xssnick/tonutils-go) + stdlib
 
 ## Project Structure
 
-The library follows Go best practice: a single flat package with file-level
-organisation. Users import one path and get all public types.
-
 ```
 fragment-api-go/
-  go.mod
-  fragment.go    — Client, New(), Config, Close, WalletBalance, WalletInfo
-  types.go       — UserInfo, PurchaseResult, TransferResult, WalletBalance
-  errors.go      — APIError, AuthenticationError, UserNotFoundError, ...
-  recipient.go   — GetRecipientStars, GetRecipientPremium, GetRecipientTON
-  stars.go       — BuyStars
-  premium.go     — GiftPremium
-  topup.go       — TopupTON
-  transfer.go    — TransferTON
-  purchase.go    — shared purchase flow (unexported)
-  core.go        — HTTP transport (unexported)
-  wallet.go      — TON wallet management (unexported)
-  helpers.go     — validation, parsing, conversion (unexported)
-  example/
-    main.go      — runnable usage example
+  go.mod           module definition
+  fragment.go      Client, New(), Config, Close, WalletBalance, WalletInfo
+  types.go         UserInfo, PurchaseResult, TransferResult, WalletBalance, WalletVersion enum, WalletInfo
+  errors.go        APIError hierarchy (10 typed errors with Unwrap chains)
+  recipient.go     GetRecipientStars, GetRecipientPremium, GetRecipientTON
+  stars.go         BuyStars
+  premium.go       GiftPremium
+  topup.go         TopupTON
+  transfer.go      TransferTON
+  purchase.go      shared purchase flow (unexported)
+  core.go          HTTP transport (unexported)
+  wallet.go        TON wallet via tonutils-go (unexported)
+  helpers.go       validation, parsing, conversion (unexported)
+  LICENSE          MIT
+  example/main.go  runnable usage example
 ```
-
-| File | Contents |
-|------|----------|
-| `fragment.go` | `Client` struct, `New()` constructor, `Config`, `Close()` |
-| `types.go` | `UserInfo`, `PurchaseResult`, `TransferResult`, `WalletBalance` |
-| `errors.go` | `APIError` (base), `AuthenticationError`, `UserNotFoundError`, `InvalidAmountError`, `InsufficientBalanceError`, `PaymentInitiationError`, `TransactionError`, `NetworkError`, `RateLimitError`, `WalletError`, `InvalidWalletVersionError` |
-| `recipient.go` | `GetRecipientStars`, `GetRecipientPremium`, `GetRecipientTON` |
-| `stars.go` | `BuyStars` |
-| `premium.go` | `GiftPremium` |
-| `topup.go` | `TopupTON` |
-| `transfer.go` | `TransferTON` |
-| `purchase.go` | Shared purchase flow used by Stars/Premium/TopUp (unexported) |
-| `core.go` | `httpCore` — HTTP client, cookies, retries (unexported) |
-| `wallet.go` | `walletManager` — TON wallet operations (unexported) |
-| `helpers.go` | Cookie parsing, username/amount validation, TON conversion (unexported) |
-
----
-
-## Setup Guide
-
-### 1. Extract Fragment Cookies
-
-1. Visit [fragment.com](https://fragment.com), press `F12`
-2. `Application` > `Cookies` > `fragment.com`
-3. Copy: `stel_ssid`, `stel_token`, `stel_dt`, `stel_ton_token`
-4. Combine: `"stel_ssid=abc; stel_token=xyz; stel_dt=-180; stel_ton_token=uvw"`
-
-### 2. Get Hash Value
-
-1. DevTools > `Network` tab, refresh fragment.com
-2. Find any request to `fragment.com/api`
-3. Copy the `hash` query parameter
-
-### 3. Prepare TON Wallet
-
-Export the 24-word mnemonic from your wallet app.
-
-| App | Default Version |
-|-----|----------------|
-| Tonkeeper | V4R2 |
-| MyTonWallet | V4R2 |
-| TonHub | V5R1 |
-
-### 4. Get TonAPI Key
-
-1. Visit [tonconsole.com](https://tonconsole.com)
-2. Create a project, copy the API Key
 
 ---
 
 ## API Reference
 
 ```go
-// Create client (WalletVersion defaults to "V4R2")
 api, err := fragment.New(fragment.Config{ ... })
 defer api.Close()
 
@@ -160,69 +91,54 @@ user, err := api.GetRecipientStars(ctx, "username")
 user, err := api.GetRecipientPremium(ctx, "username")
 user, err := api.GetRecipientTON(ctx, "username")
 
-// Purchases
+// Purchases — return (*PurchaseResult, error)
 result, err := api.BuyStars(ctx, "username", 100, false)
 result, err := api.GiftPremium(ctx, "username", 3, false)
 result, err := api.TopupTON(ctx, "username", 10, false)
 
-// Direct transfer
-transfer, err := api.TransferTON(ctx, "addr.t.me", 0.5, "memo")
+// Direct transfer — return (*TransferResult, error)
+transfer, err := api.TransferTON(ctx, "EQ...", 0.5, "memo")
 
 // Wallet
-balance, err := api.WalletBalance(ctx)
-info := api.WalletInfo()
+balance, err := api.WalletBalance(ctx)   // *WalletBalance
+info := api.WalletInfo()                 // WalletInfo (typed struct)
 ```
-
-### Parameters
-
-| Method | Parameter | Type | Description |
-|--------|-----------|------|-------------|
-| `BuyStars` | `username` | `string` | Telegram username (5-32 chars) |
-| | `quantity` | `int` | Stars count (1-999999) |
-| | `showSender` | `bool` | Show sender identity |
-| `GiftPremium` | `months` | `int` | Duration: 3, 6, or 12 |
-| `TopupTON` | `amount` | `int` | TON amount (1-999999) |
-| `TransferTON` | `toAddress` | `string` | TON address or `user.t.me` |
-| | `amountTON` | `float64` | Amount in TON |
-| | `memo` | `string` | Transaction comment ("" for none) |
 
 ---
 
-## Wallet Versions
+## Wallet Versions (Typed Enum)
 
-| Version | Status | Notes |
-|---------|--------|-------|
-| **V4R2** | **Default** | Most compatible |
-| **V5R1** | Latest | Modern features |
-| **W5** | Alias | Maps to V5R1 |
-| **V3R2** | Legacy | Older wallets |
-| **V3R1** | Legacy | Older wallets |
+```go
+fragment.WalletV3R1  // "V3R1" — legacy
+fragment.WalletV3R2  // "V3R2" — legacy
+fragment.WalletV4R2  // "V4R2" — default, recommended
+fragment.WalletV5R1  // "V5R1" — latest
+fragment.WalletW5    // "W5"   — alias for V5R1
+```
 
-Case-insensitive: `"v4r2"`, `"V4R2"`, `"V4r2"` all work.
+Config accepts case-insensitive strings: `"v4r2"`, `"V4R2"`, `"w5"`.
 
 ---
 
 ## Error Handling
 
-All error types embed `APIError` and implement the `error` interface.
-Use `errors.As` to match specific types:
+All errors form a chain. Use `errors.As` / `errors.Is` for typed matching.
+Errors are never swallowed into string fields — always returned as Go errors.
 
 ```go
-import "errors"
-
 result, err := api.BuyStars(ctx, "user", 100, false)
 if err != nil {
-    var authErr *fragment.AuthenticationError
+    var txErr  *fragment.TransactionError
+    var balErr *fragment.InsufficientBalanceError
     var userErr *fragment.UserNotFoundError
-    var balErr  *fragment.InsufficientBalanceError
 
     switch {
-    case errors.As(err, &authErr):
-        log.Println("Session expired, update cookies")
-    case errors.As(err, &userErr):
-        log.Printf("User not found: %s", userErr.Username)
+    case errors.As(err, &txErr):
+        log.Printf("TX failed: %v (cause: %v)", txErr, errors.Unwrap(txErr))
     case errors.As(err, &balErr):
         log.Printf("Need %.6f TON, have %.6f", balErr.Required, balErr.Current)
+    case errors.As(err, &userErr):
+        log.Printf("User %q not found", userErr.Username)
     default:
         log.Printf("Error: %v", err)
     }
@@ -232,36 +148,55 @@ if err != nil {
 ### Error Hierarchy
 
 ```
-APIError (base)
+APIError (base, has Unwrap)
 ├── AuthenticationError
-├── UserNotFoundError
-├── InvalidAmountError
-├── InsufficientBalanceError
+├── UserNotFoundError        — .Username
+├── InvalidAmountError       — .Amount, .MinValue, .MaxValue
+├── InsufficientBalanceError — .Required, .Current
 ├── PaymentInitiationError
 ├── TransactionError
-├── NetworkError
-├── RateLimitError
+├── NetworkError             — .StatusCode
+├── RateLimitError           — .RetryAfter
 └── WalletError
-    └── InvalidWalletVersionError
+    └── InvalidWalletVersionError — .Version, .SupportedVersions
 ```
 
 ---
 
-## Development Status
+## Logging
 
-This is a **structural skeleton** (v1.0.0). The HTTP client, types, errors,
-validation, and full high-level API are implemented and compile cleanly.
+Pass a `*slog.Logger` to enable structured logging (stdlib `log/slog`).
+Nil disables logging completely (no-op handler, zero overhead).
 
-**Requires implementation:** the `wallet.go` methods (`getBalance`,
-`sendTransaction`, `transferTON`) return stubs. Integrate a Go TON SDK:
+```go
+logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+    Level: slog.LevelDebug,
+}))
 
-- [xssnick/tonutils-go](https://github.com/xssnick/tonutils-go)
-- [tonkeeper/tongo](https://github.com/tonkeeper/tongo)
+api, _ := fragment.New(fragment.Config{
+    // ...
+    Logger: logger,
+})
+```
 
-Each stub method contains detailed TODO pseudocode.
+---
+
+## Config Reference
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `Cookies` | `string` | required | Fragment.com session cookies |
+| `HashValue` | `string` | required | API hash from DevTools |
+| `WalletMnemonic` | `string` | required | 24-word TON seed phrase |
+| `WalletVersion` | `string` | `"V4R2"` | Wallet version (case-insensitive) |
+| `Testnet` | `bool` | `false` | Use TON testnet |
+| `Timeout` | `time.Duration` | `15s` | HTTP timeout for Fragment API |
+| `Logger` | `*slog.Logger` | `nil` (disabled) | Structured logger |
 
 ---
 
 ## License
 
-MIT. Based on [fragment-api-py](https://github.com/S1qwy/fragment-api-py) by [S1qwy](https://github.com/S1qwy).
+MIT. See [LICENSE](LICENSE).
+
+Based on [fragment-api-py](https://github.com/S1qwy/fragment-api-py) by [S1qwy](https://github.com/S1qwy).

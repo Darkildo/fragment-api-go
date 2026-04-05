@@ -1,6 +1,23 @@
 package fragment
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+)
+
+// WalletVersion represents a supported TON wallet contract version.
+type WalletVersion string
+
+const (
+	WalletV3R1 WalletVersion = "V3R1"
+	WalletV3R2 WalletVersion = "V3R2"
+	WalletV4R2 WalletVersion = "V4R2" // recommended default
+	WalletV5R1 WalletVersion = "V5R1"
+	WalletW5   WalletVersion = "W5" // alias for V5R1
+)
+
+// String returns the version string.
+func (v WalletVersion) String() string { return string(v) }
 
 // UserInfo contains information about a Telegram user retrieved from
 // the Fragment API.
@@ -24,6 +41,10 @@ func (u UserInfo) String() string {
 
 // PurchaseResult contains the result of a Stars / Premium / TON top-up
 // purchase operation.
+//
+// When a purchase fails during the multi-step flow (user lookup, payment
+// initiation, transaction broadcast), the Go error is returned alongside
+// the result so that callers can use [errors.Is] and [errors.As].
 type PurchaseResult struct {
 	// Success is true when the blockchain transaction succeeded.
 	Success bool `json:"success"`
@@ -31,10 +52,7 @@ type PurchaseResult struct {
 	// TransactionHash is the blockchain transaction hash (empty on failure).
 	TransactionHash string `json:"transaction_hash,omitempty"`
 
-	// Error is set when Success is false.
-	Error string `json:"error,omitempty"`
-
-	// User is the resolved recipient information.
+	// User is the resolved recipient information (may be nil on early failures).
 	User *UserInfo `json:"user,omitempty"`
 
 	// BalanceChecked is true when the wallet balance was validated
@@ -49,7 +67,7 @@ func (p PurchaseResult) String() string {
 	if p.Success {
 		return fmt.Sprintf("PurchaseResult{OK, TX: %s, Cost: %.6f TON}", p.TransactionHash, p.RequiredAmount)
 	}
-	return fmt.Sprintf("PurchaseResult{FAIL: %s}", p.Error)
+	return "PurchaseResult{FAIL}"
 }
 
 // TransferResult contains the result of a direct TON transfer.
@@ -74,22 +92,19 @@ type TransferResult struct {
 
 	// Memo is the text comment included in the transaction.
 	Memo string `json:"memo,omitempty"`
-
-	// Error is set when Success is false.
-	Error string `json:"error,omitempty"`
 }
 
 func (t TransferResult) String() string {
 	if t.Success {
 		return fmt.Sprintf("TransferResult{OK, TX: %s, %.6f TON}", t.TransactionHash, t.AmountTON)
 	}
-	return fmt.Sprintf("TransferResult{FAIL: %s}", t.Error)
+	return "TransferResult{FAIL}"
 }
 
 // WalletBalance contains the current wallet balance and metadata.
 type WalletBalance struct {
 	// BalanceNano is the balance in nanotons (1 TON = 1e9 nanotons).
-	BalanceNano string `json:"balance_nano"`
+	BalanceNano uint64 `json:"balance_nano"`
 
 	// BalanceTON is the balance in TON.
 	BalanceTON float64 `json:"balance_ton"`
@@ -100,23 +115,39 @@ type WalletBalance struct {
 	// IsReady indicates whether the wallet is ready for transactions.
 	IsReady bool `json:"is_ready"`
 
-	// WalletVersion is the TON wallet contract version (e.g. "V4R2").
-	WalletVersion string `json:"wallet_version"`
+	// Version is the TON wallet contract version.
+	Version WalletVersion `json:"wallet_version"`
 }
 
 // HasSufficientBalance reports whether the wallet can cover requiredNano
-// plus feeNano. If feeNano is 0 a default of 1 000 000 (0.001 TON) is used.
-func (w *WalletBalance) HasSufficientBalance(requiredNano, feeNano int64) bool {
+// plus feeNano nanotons. If feeNano is 0 a default of 1 000 000 (0.001 TON)
+// is used.
+func (w *WalletBalance) HasSufficientBalance(requiredNano, feeNano uint64) bool {
 	if feeNano == 0 {
 		feeNano = 1_000_000
 	}
-	var bal int64
-	fmt.Sscanf(w.BalanceNano, "%d", &bal) //nolint:errcheck
-	return bal >= requiredNano+feeNano
+	return w.BalanceNano >= requiredNano+feeNano
 }
 
 func (w WalletBalance) String() string {
-	return fmt.Sprintf("WalletBalance{%.6f TON, %s, %s}", w.BalanceTON, w.Address, w.WalletVersion)
+	return fmt.Sprintf("WalletBalance{%.6f TON, %s, %s}", w.BalanceTON, w.Address, w.Version)
+}
+
+// WalletInfo contains metadata about the wallet configuration.
+type WalletInfo struct {
+	// Version is the active wallet contract version.
+	Version WalletVersion `json:"version"`
+
+	// SupportedVersions lists all recognised version strings.
+	SupportedVersions []WalletVersion `json:"supported_versions"`
+
+	// Address is the wallet's blockchain address.
+	// Empty until the first connection to the TON network.
+	Address string `json:"address,omitempty"`
+}
+
+func (i WalletInfo) String() string {
+	return fmt.Sprintf("WalletInfo{Version: %s, Address: %s}", i.Version, i.Address)
 }
 
 // transactionMessage is an internal representation of a single TON
@@ -125,4 +156,9 @@ type transactionMessage struct {
 	Address string `json:"address"`
 	Amount  string `json:"amount"`
 	Payload string `json:"payload"`
+}
+
+// amountNano returns the amount as uint64.
+func (t *transactionMessage) amountNano() (uint64, error) {
+	return strconv.ParseUint(t.Amount, 10, 64)
 }

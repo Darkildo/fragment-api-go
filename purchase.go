@@ -16,13 +16,19 @@ type purchaseParams struct {
 
 // executePurchase runs the common purchase flow:
 //
-//  1. Init request  → get req_id
-//  2. Get link      → get transaction message (address, amount, BOC)
-//  3. Check balance
-//  4. Send transaction
-//  5. Return PurchaseResult
+//  1. Init request  -> get req_id
+//  2. Get link      -> get transaction message (address, amount, BOC)
+//  3. Send transaction
+//  4. Return PurchaseResult
+//
+// All errors are returned as typed Go errors (never swallowed into strings).
 func (c *Client) executePurchase(ctx context.Context, user *UserInfo, p purchaseParams) (*PurchaseResult, error) {
-	// Step 1: initiate purchase
+	c.log.Debug("initiating purchase",
+		"method", p.initMethod,
+		"recipient", user.Recipient,
+	)
+
+	// Step 1: initiate purchase.
 	initData := map[string]string{
 		"method":    p.initMethod,
 		"recipient": user.Recipient,
@@ -33,19 +39,16 @@ func (c *Client) executePurchase(ctx context.Context, user *UserInfo, p purchase
 
 	initResp, err := c.core.makeRequest(ctx, initData)
 	if err != nil {
-		return &PurchaseResult{Success: false, Error: err.Error(), User: user}, nil
+		return &PurchaseResult{User: user}, fmt.Errorf("init %s: %w", p.initMethod, err)
 	}
 
 	reqID, _ := extractString(initResp, "req_id")
 	if reqID == "" {
-		return &PurchaseResult{
-			Success: false,
-			Error:   fmt.Sprintf("no req_id from %s", p.initMethod),
-			User:    user,
-		}, nil
+		return &PurchaseResult{User: user},
+			newPaymentInitiationError(fmt.Sprintf("no req_id from %s", p.initMethod), nil)
 	}
 
-	// Step 2: get transaction data
+	// Step 2: get transaction data.
 	showSenderStr := "0"
 	if p.showSender {
 		showSenderStr = "1"
@@ -56,26 +59,32 @@ func (c *Client) executePurchase(ctx context.Context, user *UserInfo, p purchase
 		"show_sender": showSenderStr,
 	})
 	if err != nil {
-		return &PurchaseResult{Success: false, Error: err.Error(), User: user}, nil
+		return &PurchaseResult{User: user}, fmt.Errorf("get link %s: %w", p.linkMethod, err)
 	}
 
 	txMsg, err := extractTransactionMsg(linkResp)
 	if err != nil {
-		return &PurchaseResult{Success: false, Error: err.Error(), User: user}, nil
+		return &PurchaseResult{User: user}, fmt.Errorf("extract tx message: %w", err)
 	}
 
-	// Step 3: send transaction via wallet
+	// Step 3: send transaction via wallet.
+	c.log.Info("sending transaction",
+		"destination", txMsg.Address,
+		"amount_nano", txMsg.Amount,
+	)
+
 	txHash, err := c.wallet.sendTransaction(ctx, txMsg.Address, txMsg.Amount, txMsg.Payload)
 	if err != nil {
-		return &PurchaseResult{
-			Success:        false,
-			Error:          fmt.Sprintf("transaction failed: %v", err),
-			User:           user,
-			BalanceChecked: true,
-		}, nil
+		return &PurchaseResult{User: user, BalanceChecked: true},
+			newTransactionError("send fragment transaction", err)
 	}
 
 	cost, _ := nanoToTON(txMsg.Amount)
+
+	c.log.Info("purchase completed",
+		"tx_hash", txHash,
+		"cost_ton", cost,
+	)
 
 	return &PurchaseResult{
 		Success:         true,

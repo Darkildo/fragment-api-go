@@ -33,7 +33,7 @@ type UserNotFoundError struct {
 // the valid range.
 type InvalidAmountError struct {
 	APIError
-	Amount   interface{}
+	Amount   int
 	MinValue int
 	MaxValue int
 }
@@ -73,16 +73,12 @@ type WalletError struct{ APIError }
 type InvalidWalletVersionError struct {
 	WalletError
 	Version           string
-	SupportedVersions map[string]string
+	SupportedVersions []WalletVersion
 }
 
 // supportedWalletVersions enumerates all recognised TON wallet versions.
-var supportedWalletVersions = map[string]string{
-	"V4R2": "WalletV4R2 — most common wallet version (recommended)",
-	"V5R1": "WalletV5R1 — latest wallet version (also known as W5)",
-	"W5":   "WalletV5R1 — alias for V5R1",
-	"V3R2": "WalletV3R2 — legacy wallet version",
-	"V3R1": "WalletV3R1 — legacy wallet version",
+var supportedWalletVersionsList = []WalletVersion{
+	WalletV4R2, WalletV5R1, WalletW5, WalletV3R2, WalletV3R1,
 }
 
 // --- constructors (unexported, used by internal code) ---
@@ -98,9 +94,12 @@ func newUserNotFoundError(username string, cause error) *UserNotFoundError {
 	}
 }
 
-func newInvalidAmountError(amount interface{}, min, max int) *InvalidAmountError {
+func newInvalidAmountError(amount, min, max int, cause error) *InvalidAmountError {
 	return &InvalidAmountError{
-		APIError: APIError{Message: fmt.Sprintf("invalid amount %v: must be between %d and %d", amount, min, max)},
+		APIError: APIError{
+			Message: fmt.Sprintf("invalid amount %d: must be between %d and %d", amount, min, max),
+			Cause:   cause,
+		},
 		Amount:   amount,
 		MinValue: min,
 		MaxValue: max,
@@ -140,12 +139,12 @@ func newWalletError(msg string, cause error) *WalletError {
 
 func newInvalidWalletVersionError(version string) *InvalidWalletVersionError {
 	msg := fmt.Sprintf("invalid wallet version: %q\nSupported wallet versions:", version)
-	for v, desc := range supportedWalletVersions {
-		msg += fmt.Sprintf("\n  - %s: %s", v, desc)
+	for _, v := range supportedWalletVersionsList {
+		msg += fmt.Sprintf("\n  - %s", v)
 	}
 	return &InvalidWalletVersionError{
 		WalletError:       WalletError{APIError{Message: msg, Cause: nil}},
 		Version:           version,
-		SupportedVersions: supportedWalletVersions,
+		SupportedVersions: supportedWalletVersionsList,
 	}
 }

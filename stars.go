@@ -17,12 +17,12 @@ func (c *Client) BuyStars(ctx context.Context, username string, quantity int, sh
 		return nil, newUserNotFoundError(username, err)
 	}
 	if err := validateAmount(quantity, 1, 999999); err != nil {
-		return nil, newInvalidAmountError(quantity, 1, 999999)
+		return nil, newInvalidAmountError(quantity, 1, 999999, err)
 	}
 
 	user, err := c.checkUser(ctx, clean, "searchStarsRecipient")
 	if err != nil {
-		return &PurchaseResult{Success: false, Error: err.Error()}, nil
+		return nil, err
 	}
 
 	return c.executePurchase(ctx, user, purchaseParams{

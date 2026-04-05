@@ -17,12 +17,12 @@ func (c *Client) TopupTON(ctx context.Context, username string, amount int, show
 		return nil, newUserNotFoundError(username, err)
 	}
 	if err := validateAmount(amount, 1, 999999); err != nil {
-		return nil, newInvalidAmountError(amount, 1, 999999)
+		return nil, newInvalidAmountError(amount, 1, 999999, err)
 	}
 
 	user, err := c.checkUser(ctx, clean, "searchAdsTopupRecipient")
 	if err != nil {
-		return &PurchaseResult{Success: false, Error: err.Error()}, nil
+		return nil, err
 	}
 
 	return c.executePurchase(ctx, user, purchaseParams{

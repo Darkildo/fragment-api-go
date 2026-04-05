@@ -2,6 +2,7 @@ package fragment
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -34,7 +35,7 @@ func (c *Client) checkUser(ctx context.Context, username, method string) (*UserI
 		"query":  clean,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("check user %q: %w", clean, err)
 	}
 
 	if ok, _ := resp["ok"].(bool); !ok {
@@ -42,7 +43,7 @@ func (c *Client) checkUser(ctx context.Context, username, method string) (*UserI
 		if msg == "" {
 			msg = "user search failed"
 		}
-		return nil, newUserNotFoundError(clean, fmt.Errorf("%s", msg))
+		return nil, newUserNotFoundError(clean, errors.New(msg))
 	}
 
 	user := &UserInfo{Found: true}

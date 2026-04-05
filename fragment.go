@@ -10,7 +10,6 @@
 //	    Cookies:        "stel_ssid=...; stel_token=...",
 //	    HashValue:      "your_hash",
 //	    WalletMnemonic: "word1 word2 ... word24",
-//	    WalletAPIKey:   "your-tonapi-key",
 //	})
 //	if err != nil {
 //	    log.Fatal(err)
@@ -23,24 +22,12 @@
 //
 // All public types and methods live in this single package. Internal details
 // (HTTP transport, HTML parsing, wallet signing) are unexported.
-//
-// Files:
-//   - fragment.go  — Client, New(), Config, Close
-//   - types.go     — UserInfo, PurchaseResult, TransferResult, WalletBalance
-//   - errors.go    — Error type hierarchy
-//   - stars.go     — BuyStars
-//   - premium.go   — GiftPremium
-//   - topup.go     — TopupTON
-//   - transfer.go  — TransferTON
-//   - recipient.go — GetRecipientStars/Premium/TON
-//   - wallet.go    — walletManager (unexported)
-//   - core.go      — httpCore (unexported)
-//   - helpers.go   — validation, parsing, conversion utilities (unexported)
 package fragment
 
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 )
 
@@ -54,66 +41,101 @@ type Config struct {
 	Cookies string
 
 	// HashValue is the API hash parameter extracted from Fragment.com
-	// network requests (DevTools → Network → any /api request → "hash" query param).
+	// network requests (DevTools -> Network -> any /api request -> "hash" query param).
 	HashValue string
 
 	// WalletMnemonic is the 24-word TON wallet seed phrase (space-separated).
 	WalletMnemonic string
 
-	// WalletAPIKey is the TonAPI key from https://tonconsole.com.
-	WalletAPIKey string
-
 	// WalletVersion is the TON wallet contract version.
-	// Supported: "V3R1", "V3R2", "V4R2" (default), "V5R1", "W5".
-	// Case-insensitive. Empty defaults to "V4R2".
+	// Supported: WalletV3R1, WalletV3R2, WalletV4R2 (default), WalletV5R1, WalletW5.
+	// Case-insensitive string is also accepted (e.g. "v4r2").
+	// Empty defaults to WalletV4R2.
 	WalletVersion string
 
-	// Timeout is the HTTP request timeout. Zero means 15 seconds.
+	// Testnet connects to the TON testnet instead of mainnet.
+	// Default is false (mainnet).
+	Testnet bool
+
+	// Timeout is the HTTP request timeout for Fragment.com API calls.
+	// Zero means 15 seconds.
 	Timeout time.Duration
+
+	// Logger is an optional structured logger ([log/slog.Logger]).
+	// If nil, a no-op logger is used (no output).
+	Logger *slog.Logger
 }
 
 // Client is the main entry point for the Fragment.com API.
 //
-// Create one with [New]. All methods are safe for concurrent use.
+// Create one with [New]. The underlying http.Client is safe for concurrent
+// use; however, wallet operations (balance, send) use a shared LiteClient
+// connection pool and do not guard against concurrent nonce conflicts.
+// If you need to send multiple transactions concurrently, use separate
+// Client instances.
 type Client struct {
 	core   *httpCore
 	wallet *walletManager
+	log    *slog.Logger
 }
 
 // New creates a new Fragment API [Client].
 //
 // It validates the configuration, initialises the HTTP transport and wallet
-// manager, and returns a ready-to-use client.
+// manager, and returns a ready-to-use client. The connection to the TON
+// network is established lazily on the first wallet operation.
 func New(cfg Config) (*Client, error) {
+	logger := cfg.Logger
+	if logger == nil {
+		logger = slog.New(discardHandler{})
+	}
+
 	core, err := newHTTPCore(cfg.Cookies, cfg.HashValue, cfg.Timeout)
 	if err != nil {
 		return nil, fmt.Errorf("fragment: %w", err)
 	}
 
-	wm, err := newWalletManager(cfg.WalletMnemonic, cfg.WalletAPIKey, cfg.WalletVersion)
+	wm, err := newWalletManager(cfg.WalletMnemonic, cfg.WalletVersion, cfg.Testnet)
 	if err != nil {
 		core.close()
 		return nil, fmt.Errorf("fragment: %w", err)
 	}
 
-	return &Client{core: core, wallet: wm}, nil
+	logger.Info("fragment client created",
+		"wallet_version", string(wm.version),
+		"testnet", cfg.Testnet,
+	)
+
+	return &Client{core: core, wallet: wm, log: logger}, nil
 }
 
-// Close releases all resources held by the client.
-// It is safe to call Close multiple times.
+// Close releases all resources held by the client, including the
+// TON LiteClient connection pool. Safe to call multiple times.
 func (c *Client) Close() {
 	if c.core != nil {
 		c.core.close()
 	}
+	if c.wallet != nil && c.wallet.pool != nil {
+		c.wallet.pool.Stop()
+	}
+	c.log.Debug("fragment client closed")
 }
 
 // WalletBalance retrieves the current TON wallet balance and metadata.
+// The first call triggers the LiteClient connection to the TON network.
 func (c *Client) WalletBalance(ctx context.Context) (*WalletBalance, error) {
 	return c.wallet.getBalance(ctx)
 }
 
-// WalletInfo returns metadata about the wallet configuration:
-// current version, supported versions, and the version alias mapping.
-func (c *Client) WalletInfo() map[string]interface{} {
+// WalletInfo returns metadata about the wallet configuration.
+func (c *Client) WalletInfo() WalletInfo {
 	return c.wallet.info()
 }
+
+// discardHandler is a [slog.Handler] that discards all log records.
+type discardHandler struct{}
+
+func (discardHandler) Enabled(context.Context, slog.Level) bool  { return false }
+func (discardHandler) Handle(context.Context, slog.Record) error { return nil }
+func (d discardHandler) WithAttrs([]slog.Attr) slog.Handler      { return d }
+func (d discardHandler) WithGroup(string) slog.Handler           { return d }

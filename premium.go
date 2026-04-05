@@ -17,12 +17,12 @@ func (c *Client) GiftPremium(ctx context.Context, username string, months int, s
 		return nil, newUserNotFoundError(username, err)
 	}
 	if err := validatePremiumMonths(months); err != nil {
-		return nil, newInvalidAmountError(months, 3, 12)
+		return nil, newInvalidAmountError(months, 3, 12, err)
 	}
 
 	user, err := c.checkUser(ctx, clean, "searchPremiumGiftRecipient")
 	if err != nil {
-		return &PurchaseResult{Success: false, Error: err.Error()}, nil
+		return nil, err
 	}
 
 	return c.executePurchase(ctx, user, purchaseParams{

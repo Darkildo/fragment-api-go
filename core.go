@@ -47,7 +47,7 @@ func newHTTPCore(cookies, hash string, timeout time.Duration) (*httpCore, error)
 
 // makeRequest sends a POST to the Fragment API and returns the parsed JSON.
 // Transient network errors are retried up to [maxRetries] times with
-// exponential back-off.
+// exponential back-off that respects context cancellation.
 func (h *httpCore) makeRequest(ctx context.Context, data map[string]string) (map[string]interface{}, error) {
 	return h.doWithRetry(ctx, data, 0)
 }
@@ -64,11 +64,8 @@ func (h *httpCore) doWithRetry(ctx context.Context, data map[string]string, atte
 		return nil, newNetworkError("create request", 0, err)
 	}
 
-	for k, vals := range h.headers {
-		for _, v := range vals {
-			req.Header.Set(k, v)
-		}
-	}
+	// Copy headers (all current headers are single-value, so clone is safe).
+	req.Header = h.headers.Clone()
 	for _, c := range h.cookies {
 		req.AddCookie(c)
 	}
@@ -76,7 +73,13 @@ func (h *httpCore) doWithRetry(ctx context.Context, data map[string]string, atte
 	resp, err := h.client.Do(req)
 	if err != nil {
 		if attempt < maxRetries {
-			time.Sleep(time.Duration(1<<attempt) * time.Second)
+			// Exponential backoff: 1s, 2s, 4s — but respect context cancellation.
+			delay := time.Duration(1<<attempt) * time.Second
+			select {
+			case <-ctx.Done():
+				return nil, newNetworkError("request cancelled during retry backoff", 0, ctx.Err())
+			case <-time.After(delay):
+			}
 			return h.doWithRetry(ctx, data, attempt+1)
 		}
 		return nil, newNetworkError("request failed after retries", 0, err)
@@ -90,7 +93,8 @@ func (h *httpCore) doWithRetry(ctx context.Context, data map[string]string, atte
 		return nil, newNetworkError(fmt.Sprintf("HTTP %d", resp.StatusCode), resp.StatusCode, nil)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	// Limit response body to 10 MB to prevent memory exhaustion.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
 		return nil, newNetworkError("read response body", resp.StatusCode, err)
 	}
