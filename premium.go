@@ -20,7 +20,7 @@ func (c *Client) GiftPremium(ctx context.Context, username string, months int, s
 		return nil, newInvalidAmountError(months, 3, 12, err)
 	}
 
-	user, err := c.checkUser(ctx, clean, "searchPremiumGiftRecipient")
+	user, err := c.checkUser(ctx, clean, "searchPremiumGiftRecipient", nil)
 	if err != nil {
 		return nil, err
 	}

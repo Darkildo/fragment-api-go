@@ -20,7 +20,7 @@ func (c *Client) TopupTON(ctx context.Context, username string, amount int, show
 		return nil, newInvalidAmountError(amount, 1, 999999, err)
 	}
 
-	user, err := c.checkUser(ctx, clean, "searchAdsTopupRecipient")
+	user, err := c.checkUser(ctx, clean, "searchAdsTopupRecipient", nil)
 	if err != nil {
 		return nil, err
 	}

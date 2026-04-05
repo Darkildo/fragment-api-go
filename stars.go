@@ -20,7 +20,7 @@ func (c *Client) BuyStars(ctx context.Context, username string, quantity int, sh
 		return nil, newInvalidAmountError(quantity, 50, 999999, err)
 	}
 
-	user, err := c.checkUser(ctx, clean, "searchStarsRecipient")
+	user, err := c.checkUser(ctx, clean, "searchStarsRecipient", map[string]string{"quantity": ""})
 	if err != nil {
 		return nil, err
 	}
