@@ -119,7 +119,7 @@ func TestAcquireTxLock_CancelledContext(t *testing.T) {
 	wm := newTestWalletManager()
 
 	// Hold the lock.
-	wm.acquireTxLock(context.Background())
+	_ = wm.acquireTxLock(context.Background())
 
 	// Pre-cancelled context.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -221,7 +221,7 @@ func TestTxSem_TimeoutWhileWaiting(t *testing.T) {
 	wm := newTestWalletManager()
 
 	// Worker 1 holds the lock for 200ms.
-	wm.acquireTxLock(context.Background())
+	_ = wm.acquireTxLock(context.Background())
 	go func() {
 		time.Sleep(200 * time.Millisecond)
 		wm.releaseTxLock()
