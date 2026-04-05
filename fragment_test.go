@@ -162,7 +162,7 @@ func TestNew_Testnet(t *testing.T) {
 	}
 	defer client.Close()
 
-	if !client.wallet.testnet {
+	if !client.wallet.Testnet {
 		t.Error("testnet should be true")
 	}
 }

@@ -1,10 +1,10 @@
-package fragment
+package helpers
 
 import (
 	"testing"
 )
 
-// --- validateUsername ---
+// --- ValidateUsername ---
 
 func TestValidateUsername_Valid(t *testing.T) {
 	tests := []struct {
@@ -20,7 +20,7 @@ func TestValidateUsername_Valid(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			got, err := validateUsername(tt.input)
+			got, err := ValidateUsername(tt.input)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -42,7 +42,7 @@ func TestValidateUsername_Invalid(t *testing.T) {
 	}
 	for _, input := range tests {
 		t.Run(input, func(t *testing.T) {
-			_, err := validateUsername(input)
+			_, err := ValidateUsername(input)
 			if err == nil {
 				t.Fatal("expected error, got nil")
 			}
@@ -50,7 +50,7 @@ func TestValidateUsername_Invalid(t *testing.T) {
 	}
 }
 
-// --- validateAmount ---
+// --- ValidateAmount ---
 
 func TestValidateAmount_Valid(t *testing.T) {
 	tests := []struct {
@@ -63,8 +63,8 @@ func TestValidateAmount_Valid(t *testing.T) {
 		{12, 3, 12},
 	}
 	for _, tt := range tests {
-		if err := validateAmount(tt.amount, tt.min, tt.max); err != nil {
-			t.Errorf("validateAmount(%d, %d, %d) = %v, want nil", tt.amount, tt.min, tt.max, err)
+		if err := ValidateAmount(tt.amount, tt.min, tt.max); err != nil {
+			t.Errorf("ValidateAmount(%d, %d, %d) = %v, want nil", tt.amount, tt.min, tt.max, err)
 		}
 	}
 }
@@ -80,31 +80,31 @@ func TestValidateAmount_Invalid(t *testing.T) {
 		{13, 3, 12},
 	}
 	for _, tt := range tests {
-		if err := validateAmount(tt.amount, tt.min, tt.max); err == nil {
-			t.Errorf("validateAmount(%d, %d, %d) = nil, want error", tt.amount, tt.min, tt.max)
+		if err := ValidateAmount(tt.amount, tt.min, tt.max); err == nil {
+			t.Errorf("ValidateAmount(%d, %d, %d) = nil, want error", tt.amount, tt.min, tt.max)
 		}
 	}
 }
 
-// --- validatePremiumMonths ---
+// --- ValidatePremiumMonths ---
 
 func TestValidatePremiumMonths(t *testing.T) {
 	valid := []int{3, 6, 12}
 	for _, m := range valid {
-		if err := validatePremiumMonths(m); err != nil {
-			t.Errorf("validatePremiumMonths(%d) = %v, want nil", m, err)
+		if err := ValidatePremiumMonths(m); err != nil {
+			t.Errorf("ValidatePremiumMonths(%d) = %v, want nil", m, err)
 		}
 	}
 
 	invalid := []int{0, 1, 2, 4, 5, 7, 11, 13, 24, -1}
 	for _, m := range invalid {
-		if err := validatePremiumMonths(m); err == nil {
-			t.Errorf("validatePremiumMonths(%d) = nil, want error", m)
+		if err := ValidatePremiumMonths(m); err == nil {
+			t.Errorf("ValidatePremiumMonths(%d) = nil, want error", m)
 		}
 	}
 }
 
-// --- parseCookies ---
+// --- ParseCookies ---
 
 func TestParseCookies(t *testing.T) {
 	tests := []struct {
@@ -140,7 +140,7 @@ func TestParseCookies(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseCookies(tt.input)
+			got := ParseCookies(tt.input)
 			if len(got) != len(tt.want) {
 				t.Fatalf("got %d cookies, want %d: %v", len(got), len(tt.want), got)
 			}
@@ -154,7 +154,7 @@ func TestParseCookies(t *testing.T) {
 }
 
 func TestCookiesToHTTP(t *testing.T) {
-	cookies := cookiesToHTTP("a=1; b=2")
+	cookies := CookiesToHTTP("a=1; b=2")
 	if len(cookies) != 2 {
 		t.Fatalf("got %d cookies, want 2", len(cookies))
 	}
@@ -167,7 +167,7 @@ func TestCookiesToHTTP(t *testing.T) {
 	}
 }
 
-// --- nanoToTON ---
+// --- NanoToTON ---
 
 func TestNanoToTON(t *testing.T) {
 	tests := []struct {
@@ -182,12 +182,12 @@ func TestNanoToTON(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			got, err := nanoToTON(tt.input)
+			got, err := NanoToTON(tt.input)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if got != tt.want {
-				t.Errorf("nanoToTON(%q) = %v, want %v", tt.input, got, tt.want)
+				t.Errorf("NanoToTON(%q) = %v, want %v", tt.input, got, tt.want)
 			}
 		})
 	}
@@ -195,14 +195,14 @@ func TestNanoToTON(t *testing.T) {
 
 func TestNanoToTON_Invalid(t *testing.T) {
 	for _, input := range []string{"", "abc", "1.5", "99999999999999999999999"} {
-		_, err := nanoToTON(input)
+		_, err := NanoToTON(input)
 		if err == nil {
-			t.Errorf("nanoToTON(%q) = nil error, want error", input)
+			t.Errorf("NanoToTON(%q) = nil error, want error", input)
 		}
 	}
 }
 
-// --- tonToNano / roundToNano ---
+// --- TonToNano / RoundToNano ---
 
 func TestTonToNano(t *testing.T) {
 	tests := []struct {
@@ -216,9 +216,9 @@ func TestTonToNano(t *testing.T) {
 		{0.001, "1000000"},
 	}
 	for _, tt := range tests {
-		got := tonToNano(tt.input)
+		got := TonToNano(tt.input)
 		if got != tt.want {
-			t.Errorf("tonToNano(%v) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("TonToNano(%v) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }
@@ -226,18 +226,18 @@ func TestTonToNano(t *testing.T) {
 func TestRoundToNano_Precision(t *testing.T) {
 	// This is the critical float precision test.
 	// Without math.Round, 1.23 * 1e9 = 1229999999 (truncation).
-	got := roundToNano(1.23)
+	got := RoundToNano(1.23)
 	if got != 1_230_000_000 {
-		t.Errorf("roundToNano(1.23) = %d, want 1230000000", got)
+		t.Errorf("RoundToNano(1.23) = %d, want 1230000000", got)
 	}
 
-	got = roundToNano(0.1)
+	got = RoundToNano(0.1)
 	if got != 100_000_000 {
-		t.Errorf("roundToNano(0.1) = %d, want 100000000", got)
+		t.Errorf("RoundToNano(0.1) = %d, want 100000000", got)
 	}
 }
 
-// --- extractAvatarURL ---
+// --- ExtractAvatarURL ---
 
 func TestExtractAvatarURL(t *testing.T) {
 	tests := []struct {
@@ -252,7 +252,7 @@ func TestExtractAvatarURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := extractAvatarURL(tt.html)
+			got := ExtractAvatarURL(tt.html)
 			if got != tt.want {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
@@ -260,7 +260,7 @@ func TestExtractAvatarURL(t *testing.T) {
 	}
 }
 
-// --- extractString ---
+// --- ExtractString ---
 
 func TestExtractString(t *testing.T) {
 	data := map[string]interface{}{
@@ -270,18 +270,18 @@ func TestExtractString(t *testing.T) {
 		},
 	}
 
-	if v, ok := extractString(data, "top_level"); !ok || v != "hello" {
+	if v, ok := ExtractString(data, "top_level"); !ok || v != "hello" {
 		t.Errorf("top_level: got %q/%v, want hello/true", v, ok)
 	}
-	if v, ok := extractString(data, "nested"); !ok || v != "world" {
+	if v, ok := ExtractString(data, "nested"); !ok || v != "world" {
 		t.Errorf("nested: got %q/%v, want world/true", v, ok)
 	}
-	if _, ok := extractString(data, "missing"); ok {
+	if _, ok := ExtractString(data, "missing"); ok {
 		t.Error("missing key: expected ok=false")
 	}
 }
 
-// --- extractTransactionMsg ---
+// --- ExtractTransactionMsg ---
 
 func TestExtractTransactionMsg_Valid(t *testing.T) {
 	data := map[string]interface{}{
@@ -296,7 +296,7 @@ func TestExtractTransactionMsg_Valid(t *testing.T) {
 		},
 	}
 
-	msg, err := extractTransactionMsg(data)
+	msg, err := ExtractTransactionMsg(data)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -323,7 +323,7 @@ func TestExtractTransactionMsg_FallbackToResult(t *testing.T) {
 			},
 		},
 	}
-	msg, err := extractTransactionMsg(data)
+	msg, err := ExtractTransactionMsg(data)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestExtractTransactionMsg_FallbackToResult(t *testing.T) {
 }
 
 func TestExtractTransactionMsg_NoResult(t *testing.T) {
-	_, err := extractTransactionMsg(map[string]interface{}{})
+	_, err := ExtractTransactionMsg(map[string]interface{}{})
 	if err == nil {
 		t.Fatal("expected error for missing result")
 	}
@@ -345,7 +345,7 @@ func TestExtractTransactionMsg_EmptyMessages(t *testing.T) {
 			"messages": []interface{}{},
 		},
 	}
-	_, err := extractTransactionMsg(data)
+	_, err := ExtractTransactionMsg(data)
 	if err == nil {
 		t.Fatal("expected error for empty messages")
 	}
@@ -361,7 +361,7 @@ func TestExtractTransactionMsg_MissingAddress(t *testing.T) {
 			},
 		},
 	}
-	_, err := extractTransactionMsg(data)
+	_, err := ExtractTransactionMsg(data)
 	if err == nil {
 		t.Fatal("expected error for missing address")
 	}

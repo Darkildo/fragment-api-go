@@ -3,6 +3,8 @@ package fragment
 import (
 	"strings"
 	"testing"
+
+	"github.com/Darkildo/fragment-api-go/internal/types"
 )
 
 // --- WalletVersion ---
@@ -151,22 +153,22 @@ func TestWalletInfo_String(t *testing.T) {
 	}
 }
 
-// --- transactionMessage ---
+// --- TransactionMessage ---
 
 func TestTransactionMessage_AmountNano(t *testing.T) {
-	msg := &transactionMessage{Amount: "1500000000"}
-	got, err := msg.amountNano()
+	msg := &types.TransactionMessage{Amount: "1500000000"}
+	got, err := msg.AmountNano()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got != 1_500_000_000 {
-		t.Errorf("amountNano() = %d, want 1500000000", got)
+		t.Errorf("AmountNano() = %d, want 1500000000", got)
 	}
 }
 
 func TestTransactionMessage_AmountNano_Invalid(t *testing.T) {
-	msg := &transactionMessage{Amount: "not_a_number"}
-	_, err := msg.amountNano()
+	msg := &types.TransactionMessage{Amount: "not_a_number"}
+	_, err := msg.AmountNano()
 	if err == nil {
 		t.Fatal("expected error for invalid amount")
 	}

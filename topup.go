@@ -3,6 +3,10 @@ package fragment
 import (
 	"context"
 	"fmt"
+
+	"github.com/Darkildo/fragment-api-go/internal/helpers"
+	"github.com/Darkildo/fragment-api-go/internal/purchase"
+	"github.com/Darkildo/fragment-api-go/internal/types"
 )
 
 // TopupTON tops up TON balance for a Telegram Ads account.
@@ -12,12 +16,12 @@ import (
 //   - amount:     amount of TON to transfer (1-999 999).
 //   - showSender: when true the sender's identity is visible to the recipient.
 func (c *Client) TopupTON(ctx context.Context, username string, amount int, showSender bool) (*PurchaseResult, error) {
-	clean, err := validateUsername(username)
+	clean, err := helpers.ValidateUsername(username)
 	if err != nil {
-		return nil, newUserNotFoundError(username, err)
+		return nil, types.NewUserNotFoundError(username, err)
 	}
-	if err := validateAmount(amount, 1, 999999); err != nil {
-		return nil, newInvalidAmountError(amount, 1, 999999, err)
+	if err := helpers.ValidateAmount(amount, 1, 999999); err != nil {
+		return nil, types.NewInvalidAmountError(amount, 1, 999999, err)
 	}
 
 	user, err := c.checkUser(ctx, clean, "searchAdsTopupRecipient", nil)
@@ -25,10 +29,10 @@ func (c *Client) TopupTON(ctx context.Context, username string, amount int, show
 		return nil, err
 	}
 
-	return c.executePurchase(ctx, user, purchaseParams{
-		initMethod: "initAdsTopupRequest",
-		linkMethod: "getAdsTopupLink",
-		extra:      map[string]string{"amount": fmt.Sprintf("%d", amount)},
-		showSender: showSender,
+	return purchase.Execute(ctx, c.core, c.wallet, c.log, user, purchase.Params{
+		InitMethod: "initAdsTopupRequest",
+		LinkMethod: "getAdsTopupLink",
+		Extra:      map[string]string{"amount": fmt.Sprintf("%d", amount)},
+		ShowSender: showSender,
 	})
 }

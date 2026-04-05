@@ -20,8 +20,8 @@
 //
 // # Architecture
 //
-// All public types and methods live in this single package. Internal details
-// (HTTP transport, HTML parsing, wallet signing) are unexported.
+// All public types and methods live in this package. Internal details
+// (HTTP transport, HTML parsing, wallet signing) are in internal/ packages.
 package fragment
 
 import (
@@ -29,10 +29,13 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/Darkildo/fragment-api-go/internal/httpcore"
+	"github.com/Darkildo/fragment-api-go/internal/tonwallet"
 )
 
 // Version is the library version. Go port of fragment-api-py v3.2.0.
-const Version = "1.0.0"
+const Version = "1.3.0"
 
 // Config contains all parameters needed to create a [Client].
 type Config struct {
@@ -74,8 +77,8 @@ type Config struct {
 // If you need to send multiple transactions concurrently, use separate
 // Client instances.
 type Client struct {
-	core   *httpCore
-	wallet *walletManager
+	core   *httpcore.Core
+	wallet *tonwallet.Manager
 	log    *slog.Logger
 }
 
@@ -90,19 +93,19 @@ func New(cfg Config) (*Client, error) {
 		logger = slog.New(discardHandler{})
 	}
 
-	core, err := newHTTPCore(cfg.Cookies, cfg.HashValue, cfg.Timeout)
+	core, err := httpcore.New(cfg.Cookies, cfg.HashValue, cfg.Timeout)
 	if err != nil {
 		return nil, fmt.Errorf("fragment: %w", err)
 	}
 
-	wm, err := newWalletManager(cfg.WalletMnemonic, cfg.WalletVersion, cfg.Testnet)
+	wm, err := tonwallet.New(cfg.WalletMnemonic, cfg.WalletVersion, cfg.Testnet)
 	if err != nil {
-		core.close()
+		core.Close()
 		return nil, fmt.Errorf("fragment: %w", err)
 	}
 
 	logger.Info("fragment client created",
-		"wallet_version", string(wm.version),
+		"wallet_version", string(wm.Version),
 		"testnet", cfg.Testnet,
 	)
 
@@ -113,10 +116,10 @@ func New(cfg Config) (*Client, error) {
 // TON LiteClient connection pool. Safe to call multiple times.
 func (c *Client) Close() {
 	if c.core != nil {
-		c.core.close()
+		c.core.Close()
 	}
-	if c.wallet != nil && c.wallet.pool != nil {
-		c.wallet.pool.Stop()
+	if c.wallet != nil && c.wallet.Pool != nil {
+		c.wallet.Pool.Stop()
 	}
 	c.log.Debug("fragment client closed")
 }
@@ -124,12 +127,12 @@ func (c *Client) Close() {
 // WalletBalance retrieves the current TON wallet balance and metadata.
 // The first call triggers the LiteClient connection to the TON network.
 func (c *Client) WalletBalance(ctx context.Context) (*WalletBalance, error) {
-	return c.wallet.getBalance(ctx)
+	return c.wallet.GetBalance(ctx)
 }
 
 // WalletInfo returns metadata about the wallet configuration.
 func (c *Client) WalletInfo() WalletInfo {
-	return c.wallet.info()
+	return c.wallet.Info()
 }
 
 // discardHandler is a [slog.Handler] that discards all log records.

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Darkildo/fragment-api-go/internal/tonwallet"
+	"github.com/Darkildo/fragment-api-go/internal/types"
 	"github.com/xssnick/tonutils-go/ton"
 )
 
@@ -42,7 +44,7 @@ func TestAPIError_Unwrap(t *testing.T) {
 // --- errors.As matching ---
 
 func TestErrorsAs_AuthenticationError(t *testing.T) {
-	err := newAuthenticationError("session expired", nil)
+	err := types.NewAuthenticationError("session expired", nil)
 	var target *AuthenticationError
 	if !errors.As(err, &target) {
 		t.Fatal("errors.As should match *AuthenticationError")
@@ -50,16 +52,11 @@ func TestErrorsAs_AuthenticationError(t *testing.T) {
 	if target.Message != "session expired" {
 		t.Errorf("Message = %q", target.Message)
 	}
-
-	// Note: errors.As does NOT traverse struct embedding.
-	// *AuthenticationError embeds APIError by value, so errors.As
-	// with *APIError won't match. The correct way to match the base
-	// is via the concrete type. This is standard Go errors behaviour.
 }
 
 func TestErrorsAs_UserNotFoundError(t *testing.T) {
 	cause := fmt.Errorf("invalid username")
-	err := newUserNotFoundError("test_user", cause)
+	err := types.NewUserNotFoundError("test_user", cause)
 	var target *UserNotFoundError
 	if !errors.As(err, &target) {
 		t.Fatal("errors.As should match *UserNotFoundError")
@@ -74,7 +71,7 @@ func TestErrorsAs_UserNotFoundError(t *testing.T) {
 
 func TestErrorsAs_InvalidAmountError(t *testing.T) {
 	cause := fmt.Errorf("out of range")
-	err := newInvalidAmountError(0, 1, 100, cause)
+	err := types.NewInvalidAmountError(0, 1, 100, cause)
 	var target *InvalidAmountError
 	if !errors.As(err, &target) {
 		t.Fatal("errors.As should match")
@@ -88,7 +85,7 @@ func TestErrorsAs_InvalidAmountError(t *testing.T) {
 }
 
 func TestErrorsAs_InsufficientBalanceError(t *testing.T) {
-	err := newInsufficientBalanceError(1.5, 0.3)
+	err := types.NewInsufficientBalanceError(1.5, 0.3)
 	var target *InsufficientBalanceError
 	if !errors.As(err, &target) {
 		t.Fatal("errors.As should match")
@@ -100,7 +97,7 @@ func TestErrorsAs_InsufficientBalanceError(t *testing.T) {
 
 func TestErrorsAs_NetworkError(t *testing.T) {
 	cause := fmt.Errorf("timeout")
-	err := newNetworkError("request failed", 503, cause)
+	err := types.NewNetworkError("request failed", 503, cause)
 	var target *NetworkError
 	if !errors.As(err, &target) {
 		t.Fatal("errors.As should match")
@@ -114,7 +111,7 @@ func TestErrorsAs_NetworkError(t *testing.T) {
 }
 
 func TestErrorsAs_RateLimitError(t *testing.T) {
-	err := newRateLimitError(60)
+	err := types.NewRateLimitError(60)
 	var target *RateLimitError
 	if !errors.As(err, &target) {
 		t.Fatal("errors.As should match")
@@ -126,7 +123,7 @@ func TestErrorsAs_RateLimitError(t *testing.T) {
 
 func TestErrorsAs_TransactionError(t *testing.T) {
 	cause := fmt.Errorf("boc decode failed")
-	err := newTransactionError("send failed", cause)
+	err := types.NewTransactionError("send failed", cause)
 	var target *TransactionError
 	if !errors.As(err, &target) {
 		t.Fatal("errors.As should match")
@@ -137,7 +134,7 @@ func TestErrorsAs_TransactionError(t *testing.T) {
 }
 
 func TestErrorsAs_WalletError(t *testing.T) {
-	err := newWalletError("init failed", nil)
+	err := types.NewWalletError("init failed", nil)
 	var target *WalletError
 	if !errors.As(err, &target) {
 		t.Fatal("errors.As should match")
@@ -145,7 +142,7 @@ func TestErrorsAs_WalletError(t *testing.T) {
 }
 
 func TestErrorsAs_InvalidWalletVersionError(t *testing.T) {
-	err := newInvalidWalletVersionError("V99")
+	err := types.NewInvalidWalletVersionError("V99")
 	var target *InvalidWalletVersionError
 	if !errors.As(err, &target) {
 		t.Fatal("errors.As should match")
@@ -156,15 +153,10 @@ func TestErrorsAs_InvalidWalletVersionError(t *testing.T) {
 	if len(target.SupportedVersions) == 0 {
 		t.Error("SupportedVersions should not be empty")
 	}
-
-	// Note: errors.As does NOT traverse struct embedding.
-	// *InvalidWalletVersionError embeds WalletError by value, so
-	// errors.As with *WalletError won't match through embedding alone.
-	// This is standard Go errors behaviour — match the concrete type.
 }
 
 func TestErrorsAs_PaymentInitiationError(t *testing.T) {
-	err := newPaymentInitiationError("no req_id", nil)
+	err := types.NewPaymentInitiationError("no req_id", nil)
 	var target *PaymentInitiationError
 	if !errors.As(err, &target) {
 		t.Fatal("errors.As should match")
@@ -175,7 +167,7 @@ func TestErrorsAs_PaymentInitiationError(t *testing.T) {
 
 func TestErrorsAs_TransactionNotConfirmedError(t *testing.T) {
 	cause := fmt.Errorf("some timeout")
-	err := newTransactionNotConfirmedError(cause)
+	err := types.NewTransactionNotConfirmedError(cause)
 
 	var target *TransactionNotConfirmedError
 	if !errors.As(err, &target) {
@@ -191,21 +183,16 @@ func TestErrorsAs_TransactionNotConfirmedError(t *testing.T) {
 
 func TestClassifyTxError_NotConfirmed(t *testing.T) {
 	// Simulate the exact error tonutils-go returns.
-	err := classifyTxError("send", ton.ErrTxWasNotConfirmed)
+	err := tonwallet.ClassifyTxError("send", ton.ErrTxWasNotConfirmed)
 
 	var target *TransactionNotConfirmedError
 	if !errors.As(err, &target) {
 		t.Fatalf("expected *TransactionNotConfirmedError, got %T: %v", err, err)
 	}
-
-	// Note: errors.As does NOT traverse struct embedding, so matching
-	// *TransactionError via *TransactionNotConfirmedError requires the
-	// concrete type. Users should match *TransactionNotConfirmedError first,
-	// then fall back to *TransactionError for other tx failures.
 }
 
 func TestClassifyTxError_OtherError(t *testing.T) {
-	err := classifyTxError("send", fmt.Errorf("boc decode failed"))
+	err := tonwallet.ClassifyTxError("send", fmt.Errorf("boc decode failed"))
 
 	var target *TransactionNotConfirmedError
 	if errors.As(err, &target) {
@@ -221,7 +208,7 @@ func TestClassifyTxError_OtherError(t *testing.T) {
 func TestClassifyTxError_WrappedNotConfirmed(t *testing.T) {
 	// tonutils-go might wrap ErrTxWasNotConfirmed in fmt.Errorf.
 	wrapped := fmt.Errorf("wallet send: %w", ton.ErrTxWasNotConfirmed)
-	err := classifyTxError("send", wrapped)
+	err := tonwallet.ClassifyTxError("send", wrapped)
 
 	var target *TransactionNotConfirmedError
 	if !errors.As(err, &target) {
@@ -232,7 +219,7 @@ func TestClassifyTxError_WrappedNotConfirmed(t *testing.T) {
 // --- Error chain wrapping with fmt.Errorf %w ---
 
 func TestErrorChain_FmtErrorfWrap(t *testing.T) {
-	inner := newNetworkError("timeout", 0, nil)
+	inner := types.NewNetworkError("timeout", 0, nil)
 	wrapped := fmt.Errorf("purchase step 2: %w", inner)
 
 	var target *NetworkError

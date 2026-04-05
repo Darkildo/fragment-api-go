@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/Darkildo/fragment-api-go/internal/helpers"
+	"github.com/Darkildo/fragment-api-go/internal/types"
 )
 
 // GetRecipientStars looks up a Telegram user for a Stars transfer.
@@ -30,9 +33,9 @@ func (c *Client) GetRecipientTON(ctx context.Context, username string) (*UserInf
 //	Success: {"found": {"name": "...", "recipient": "...", "photo": "<img ...>"}}
 //	Error:   {"error": "No Telegram users found."}
 func (c *Client) checkUser(ctx context.Context, username, method string, extra map[string]string) (*UserInfo, error) {
-	clean, err := validateUsername(username)
+	clean, err := helpers.ValidateUsername(username)
 	if err != nil {
-		return nil, newUserNotFoundError(username, err)
+		return nil, types.NewUserNotFoundError(username, err)
 	}
 
 	data := map[string]string{
@@ -43,7 +46,7 @@ func (c *Client) checkUser(ctx context.Context, username, method string, extra m
 		data[k] = v
 	}
 
-	resp, err := c.core.makeRequest(ctx, data)
+	resp, err := c.core.MakeRequest(ctx, data)
 	if err != nil {
 		return nil, fmt.Errorf("check user %q: %w", clean, err)
 	}
@@ -62,16 +65,16 @@ func (c *Client) checkUser(ctx context.Context, username, method string, extra m
 		}
 
 		if msg == "Session expired" || msg == "AUTH_SESSION_EXPIRED" {
-			return nil, newAuthenticationError(msg, nil)
+			return nil, types.NewAuthenticationError(msg, nil)
 		}
 
-		return nil, newUserNotFoundError(clean, errors.New(msg))
+		return nil, types.NewUserNotFoundError(clean, errors.New(msg))
 	}
 
 	// Extract from "found" top-level key.
 	found, ok := resp["found"].(map[string]interface{})
 	if !ok || found == nil {
-		return nil, newUserNotFoundError(clean, errors.New("no 'found' data in response"))
+		return nil, types.NewUserNotFoundError(clean, errors.New("no 'found' data in response"))
 	}
 
 	user := &UserInfo{Found: true}
@@ -87,11 +90,11 @@ func (c *Client) checkUser(ctx context.Context, username, method string, extra m
 	}
 
 	if v, ok := found["photo"].(string); ok {
-		user.Avatar = extractAvatarURL(v)
+		user.Avatar = helpers.ExtractAvatarURL(v)
 	}
 
 	if user.Recipient == "" {
-		return nil, newUserNotFoundError(clean, errors.New("recipient field is empty in response"))
+		return nil, types.NewUserNotFoundError(clean, errors.New("recipient field is empty in response"))
 	}
 
 	c.log.Debug("user found",

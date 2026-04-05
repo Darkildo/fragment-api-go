@@ -9,5 +9,5 @@ import "context"
 //   - amountTON: amount to transfer in TON.
 //   - memo:      text comment attached to the transaction (pass "" for none).
 func (c *Client) TransferTON(ctx context.Context, toAddress string, amountTON float64, memo string) (*TransferResult, error) {
-	return c.wallet.transferTON(ctx, toAddress, amountTON, memo)
+	return c.wallet.TransferTON(ctx, toAddress, amountTON, memo)
 }
