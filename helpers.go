@@ -135,13 +135,22 @@ func extractString(data map[string]interface{}, key string) (string, bool) {
 
 // extractTransactionMsg extracts the first transaction message from a
 // Fragment API response.
+//
+// Fragment API response format:
+//
+//	{"transaction": {"messages": [{"address": "...", "amount": "...", "payload": "..."}]}}
 func extractTransactionMsg(data map[string]interface{}) (*transactionMessage, error) {
-	result, ok := data["result"].(map[string]interface{})
+	// Try "transaction" key (Fragment API standard).
+	tx, ok := data["transaction"].(map[string]interface{})
 	if !ok {
-		return nil, newPaymentInitiationError("no result in response", nil)
+		// Fallback: try "result" key for compatibility.
+		tx, ok = data["result"].(map[string]interface{})
+		if !ok {
+			return nil, newPaymentInitiationError("no 'transaction' or 'result' in response", nil)
+		}
 	}
 
-	messages, ok := result["messages"].([]interface{})
+	messages, ok := tx["messages"].([]interface{})
 	if !ok || len(messages) == 0 {
 		return nil, newPaymentInitiationError("no transaction messages in response", nil)
 	}

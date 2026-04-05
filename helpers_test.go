@@ -285,7 +285,7 @@ func TestExtractString(t *testing.T) {
 
 func TestExtractTransactionMsg_Valid(t *testing.T) {
 	data := map[string]interface{}{
-		"result": map[string]interface{}{
+		"transaction": map[string]interface{}{
 			"messages": []interface{}{
 				map[string]interface{}{
 					"address": "EQ123",
@@ -311,6 +311,27 @@ func TestExtractTransactionMsg_Valid(t *testing.T) {
 	}
 }
 
+func TestExtractTransactionMsg_FallbackToResult(t *testing.T) {
+	data := map[string]interface{}{
+		"result": map[string]interface{}{
+			"messages": []interface{}{
+				map[string]interface{}{
+					"address": "EQfallback",
+					"amount":  "500",
+					"payload": "",
+				},
+			},
+		},
+	}
+	msg, err := extractTransactionMsg(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if msg.Address != "EQfallback" {
+		t.Errorf("address: got %q, want EQfallback", msg.Address)
+	}
+}
+
 func TestExtractTransactionMsg_NoResult(t *testing.T) {
 	_, err := extractTransactionMsg(map[string]interface{}{})
 	if err == nil {
@@ -320,7 +341,7 @@ func TestExtractTransactionMsg_NoResult(t *testing.T) {
 
 func TestExtractTransactionMsg_EmptyMessages(t *testing.T) {
 	data := map[string]interface{}{
-		"result": map[string]interface{}{
+		"transaction": map[string]interface{}{
 			"messages": []interface{}{},
 		},
 	}
@@ -332,7 +353,7 @@ func TestExtractTransactionMsg_EmptyMessages(t *testing.T) {
 
 func TestExtractTransactionMsg_MissingAddress(t *testing.T) {
 	data := map[string]interface{}{
-		"result": map[string]interface{}{
+		"transaction": map[string]interface{}{
 			"messages": []interface{}{
 				map[string]interface{}{
 					"amount": "100",
