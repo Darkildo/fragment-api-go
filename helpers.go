@@ -2,6 +2,7 @@ package fragment
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -76,8 +77,15 @@ func nanoToTON(nano string) (float64, error) {
 }
 
 // tonToNano converts TON (float64) to nanotons (string).
+// Uses math.Round to avoid floating-point truncation issues.
 func tonToNano(ton float64) string {
-	return strconv.FormatInt(int64(ton*1e9), 10)
+	return strconv.FormatInt(roundToNano(ton), 10)
+}
+
+// roundToNano converts TON to nanotons as int64, rounding to the nearest
+// integer to avoid floating-point precision loss (e.g. 1.23 * 1e9 = 1230000000).
+func roundToNano(ton float64) int64 {
+	return int64(math.Round(ton * 1e9))
 }
 
 // --- HTTP defaults ---
@@ -125,7 +133,7 @@ func extractString(data map[string]interface{}, key string) (string, bool) {
 	return "", false
 }
 
-// extractTransactionMessage extracts the first transaction message from a
+// extractTransactionMsg extracts the first transaction message from a
 // Fragment API response.
 func extractTransactionMsg(data map[string]interface{}) (*transactionMessage, error) {
 	result, ok := data["result"].(map[string]interface{})

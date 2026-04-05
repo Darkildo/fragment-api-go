@@ -14,7 +14,7 @@ import (
 func (c *Client) GiftPremium(ctx context.Context, username string, months int, showSender bool) (*PurchaseResult, error) {
 	clean, err := validateUsername(username)
 	if err != nil {
-		return nil, newInvalidAmountError(username, 0, 0)
+		return nil, newUserNotFoundError(username, err)
 	}
 	if err := validatePremiumMonths(months); err != nil {
 		return nil, newInvalidAmountError(months, 3, 12)
