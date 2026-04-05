@@ -40,10 +40,19 @@ var versionAliases = map[string]WalletVersion{
 }
 
 // walletManager handles TON wallet operations via tonutils-go.
+//
+// Transactions are serialised via a channel semaphore (txSem) to prevent
+// concurrent seqno conflicts on the TON blockchain. Only one transaction
+// can be in-flight at a time. Callers waiting for the lock can cancel
+// via context.
 type walletManager struct {
 	mnemonic []string
 	version  WalletVersion
 	testnet  bool
+
+	// txSem serialises all transaction sends (buffer size 1).
+	// Write to acquire, read to release.
+	txSem chan struct{}
 
 	// Lazily initialised on first blockchain call via sync.Once.
 	once    sync.Once
@@ -74,6 +83,7 @@ func newWalletManager(mnemonic, version string, testnet bool) (*walletManager, e
 		mnemonic: words,
 		version:  ver,
 		testnet:  testnet,
+		txSem:    make(chan struct{}, 1),
 	}, nil
 }
 
@@ -123,6 +133,23 @@ func (w *walletManager) connect(ctx context.Context) error {
 	w.api = apiClient
 	w.wallet = wlt
 	return nil
+}
+
+// acquireTxLock waits to acquire the transaction semaphore.
+// Returns nil on success, or ctx.Err() if the context is cancelled/expired
+// while waiting.
+func (w *walletManager) acquireTxLock(ctx context.Context) error {
+	select {
+	case w.txSem <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("waiting for transaction slot: %w", ctx.Err())
+	}
+}
+
+// releaseTxLock releases the transaction semaphore.
+func (w *walletManager) releaseTxLock() {
+	<-w.txSem
 }
 
 // tonutilsVersionConfig returns the tonutils-go VersionConfig for the
@@ -192,8 +219,7 @@ func (w *walletManager) sendTransaction(ctx context.Context, destination, amount
 		return "", err
 	}
 
-	ctx = w.pool.StickyContext(ctx)
-
+	// Validate inputs before acquiring the lock — fail fast.
 	dest, err := address.ParseAddr(destination)
 	if err != nil {
 		return "", newWalletError(fmt.Sprintf("parse destination address %q", destination), err)
@@ -217,6 +243,13 @@ func (w *walletManager) sendTransaction(ctx context.Context, destination, amount
 		}
 	}
 
+	// Acquire transaction lock — only one tx in-flight at a time.
+	if err = w.acquireTxLock(ctx); err != nil {
+		return "", newWalletError("send transaction", err)
+	}
+	defer w.releaseTxLock()
+
+	ctx = w.pool.StickyContext(ctx)
 	msg := wallet.SimpleMessage(dest, amount, body)
 
 	tx, _, err := w.wallet.SendWaitTransaction(ctx, msg)
@@ -240,12 +273,19 @@ func (w *walletManager) transferTON(ctx context.Context, toAddress string, amoun
 		return nil, err
 	}
 
-	ctx = w.pool.StickyContext(ctx)
-
+	// Validate address before acquiring the lock — fail fast.
 	dest, err := address.ParseAddr(toAddress)
 	if err != nil {
 		return nil, newWalletError(fmt.Sprintf("parse address %q", toAddress), err)
 	}
+
+	// Acquire transaction lock — only one tx in-flight at a time.
+	if err = w.acquireTxLock(ctx); err != nil {
+		return nil, newWalletError("transfer TON", err)
+	}
+	defer w.releaseTxLock()
+
+	ctx = w.pool.StickyContext(ctx)
 
 	balBefore, err := w.getBalance(ctx)
 	if err != nil {
