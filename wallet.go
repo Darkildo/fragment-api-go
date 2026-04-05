@@ -19,7 +19,8 @@ import (
 
 const (
 	// fragmentTxFeeNano is the fee for Fragment-initiated transactions (balance check).
-	fragmentTxFeeNano uint64 = 1_000_000 // 0.001 TON
+	// Currently unused but reserved for future balance pre-check before Fragment purchases.
+	fragmentTxFeeNano uint64 = 1_000_000 //nolint:unused // reserved for future use
 
 	// directTransferFeeTON is the fee buffer for direct TON transfers.
 	directTransferFeeTON float64 = 0.05
