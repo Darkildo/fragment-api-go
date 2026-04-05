@@ -72,9 +72,12 @@ type PurchaseResult struct {
 // String implements [fmt.Stringer].
 func (p PurchaseResult) String() string {
 	if p.Success {
-		return fmt.Sprintf("PurchaseResult{OK, TX: %s, Cost: %.6f TON}", p.TransactionHash, p.RequiredAmount)
+		return fmt.Sprintf("PurchaseResult{TX: %s, Cost: %.6f TON}", p.TransactionHash, p.RequiredAmount)
 	}
-	return "PurchaseResult{FAIL}"
+	if p.User != nil {
+		return fmt.Sprintf("PurchaseResult{Pending, User: %s}", p.User.Name)
+	}
+	return "PurchaseResult{Pending}"
 }
 
 // TransferResult contains the result of a direct TON transfer.
@@ -103,10 +106,8 @@ type TransferResult struct {
 
 // String implements [fmt.Stringer].
 func (t TransferResult) String() string {
-	if t.Success {
-		return fmt.Sprintf("TransferResult{OK, TX: %s, %.6f TON}", t.TransactionHash, t.AmountTON)
-	}
-	return "TransferResult{FAIL}"
+	return fmt.Sprintf("TransferResult{TX: %s, %.6f TON, %s -> %s}",
+		t.TransactionHash, t.AmountTON, t.FromAddress, t.ToAddress)
 }
 
 // WalletBalance contains the current wallet balance and metadata.
