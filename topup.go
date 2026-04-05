@@ -1,0 +1,34 @@
+package fragment
+
+import (
+	"context"
+	"fmt"
+)
+
+// TopupTON tops up TON balance for a Telegram Ads account.
+//
+// Parameters:
+//   - username:   target username or ads account.
+//   - amount:     amount of TON to transfer (1–999 999).
+//   - showSender: when true the sender's identity is visible to the recipient.
+func (c *Client) TopupTON(ctx context.Context, username string, amount int, showSender bool) (*PurchaseResult, error) {
+	clean, err := validateUsername(username)
+	if err != nil {
+		return nil, newInvalidAmountError(username, 0, 0)
+	}
+	if err := validateAmount(amount, 1, 999999); err != nil {
+		return nil, newInvalidAmountError(amount, 1, 999999)
+	}
+
+	user, err := c.checkUser(ctx, clean, "searchAdsTopupRecipient")
+	if err != nil {
+		return &PurchaseResult{Success: false, Error: err.Error()}, nil
+	}
+
+	return c.executePurchase(ctx, user, purchaseParams{
+		initMethod: "initAdsTopupRequest",
+		linkMethod: "getAdsTopupLink",
+		extra:      map[string]string{"amount": fmt.Sprintf("%d", amount)},
+		showSender: showSender,
+	})
+}

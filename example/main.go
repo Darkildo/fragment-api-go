@@ -15,17 +15,16 @@ import (
 	"log"
 	"os"
 
-	"github.com/Darkildo/fragment-api-go/client"
+	fragment "github.com/Darkildo/fragment-api-go"
 )
 
 func main() {
-	// Initialize the client from environment variables
-	api, err := client.New(client.Config{
+	api, err := fragment.New(fragment.Config{
 		Cookies:        os.Getenv("FRAGMENT_COOKIES"),
 		HashValue:      os.Getenv("FRAGMENT_HASH"),
 		WalletMnemonic: os.Getenv("WALLET_MNEMONIC"),
 		WalletAPIKey:   os.Getenv("WALLET_API_KEY"),
-		WalletVersion:  getEnvOrDefault("WALLET_VERSION", "V4R2"),
+		WalletVersion:  envOrDefault("WALLET_VERSION", "V4R2"),
 	})
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
@@ -34,7 +33,7 @@ func main() {
 
 	ctx := context.Background()
 
-	// --- Example 1: Look up a user ---
+	// --- Look up a user ---
 	fmt.Println("=== Looking up user ===")
 	user, err := api.GetRecipientStars(ctx, "jane_doe")
 	if err != nil {
@@ -45,7 +44,7 @@ func main() {
 		fmt.Printf("Found:     %v\n", user.Found)
 	}
 
-	// --- Example 2: Send Stars (anonymous) ---
+	// --- Send Stars (anonymous) ---
 	fmt.Println("\n=== Sending 100 Stars (anonymous) ===")
 	result, err := api.BuyStars(ctx, "jane_doe", 100, false)
 	if err != nil {
@@ -57,7 +56,7 @@ func main() {
 		fmt.Printf("Failed: %s\n", result.Error)
 	}
 
-	// --- Example 3: Send Stars (visible sender) ---
+	// --- Send Stars (visible sender) ---
 	fmt.Println("\n=== Sending 50 Stars (visible sender) ===")
 	result, err = api.BuyStars(ctx, "jane_doe", 50, true)
 	if err != nil {
@@ -68,7 +67,7 @@ func main() {
 		fmt.Printf("Failed: %s\n", result.Error)
 	}
 
-	// --- Example 4: Gift Premium ---
+	// --- Gift Premium ---
 	fmt.Println("\n=== Gifting 3 months Premium ===")
 	premResult, err := api.GiftPremium(ctx, "jane_doe", 3, false)
 	if err != nil {
@@ -79,7 +78,7 @@ func main() {
 		fmt.Printf("Failed: %s\n", premResult.Error)
 	}
 
-	// --- Example 5: Direct TON transfer ---
+	// --- Direct TON transfer ---
 	fmt.Println("\n=== Transferring 0.5 TON ===")
 	transfer, err := api.TransferTON(ctx, "recipient.t.me", 0.5, "Payment for services")
 	if err != nil {
@@ -94,11 +93,11 @@ func main() {
 		fmt.Printf("Failed: %s\n", transfer.Error)
 	}
 
-	// --- Example 6: Check wallet balance ---
+	// --- Check wallet balance ---
 	fmt.Println("\n=== Wallet Balance ===")
-	balance, err := api.GetWalletBalance(ctx)
+	balance, err := api.WalletBalance(ctx)
 	if err != nil {
-		log.Printf("GetWalletBalance error: %v", err)
+		log.Printf("WalletBalance error: %v", err)
 	} else {
 		fmt.Printf("Balance: %.6f TON\n", balance.BalanceTON)
 		fmt.Printf("Address: %s\n", balance.Address)
@@ -106,16 +105,16 @@ func main() {
 		fmt.Printf("Ready:   %v\n", balance.IsReady)
 	}
 
-	// --- Example 7: Wallet info ---
+	// --- Wallet info ---
 	fmt.Println("\n=== Wallet Info ===")
-	info := api.GetWalletInfo()
+	info := api.WalletInfo()
 	fmt.Printf("Version:   %s\n", info["version"])
 	fmt.Printf("Supported: %v\n", info["supported_versions"])
 }
 
-func getEnvOrDefault(key, defaultVal string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
 	}
-	return defaultVal
+	return fallback
 }
